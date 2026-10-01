@@ -1,158 +1,141 @@
-from typing import List, Tuple
 from abc import ABC, abstractmethod
+from typing import List, Tuple
 
 from ..models import MinimalSource
 
+Span = Tuple[int, int]
 
-class BaseChunker(ABC):
 
-    def __init__(self, max_chunk_size: int = 2000) -> None:
-        self._max_chunk_size: int = max_chunk_size
+class SpanPacker:
 
-    @abstractmethod
-    def chunk(
-        self,
-        file_path: str,
-        content: str,
+    def __init__(self, max_chunk_size: int) -> None:
+        self._max: int = max_chunk_size
+
+    def split_paragraphs(
+        self, text: str, start: int, end: int,
+    ) -> List[Span]:
+        parts: List[str] = text[start:end].split(
+            "\n\n",
+        )
+        if len(parts) <= 1:
+            return [(start, end)]
+        return self._parts_spans(parts, start, end)
+
+    def _parts_spans(
+        self, parts: List[str],
+        start: int, end: int,
+    ) -> List[Span]:
+        spans: List[Span] = []
+        pos: int = start
+        for part in parts:
+            se: int = min(pos + len(part), end)
+            if se < end:
+                se += 2
+            spans.append((pos, min(se, end)))
+            pos = min(se, end)
+        return spans
+
+    def pack(
+        self, content: str, spans: List[Span],
+    ) -> List[Span]:
+        if not spans:
+            return []
+        packed: List[Span] = []
+        cs, ce = spans[0]
+        for s, e in spans[1:]:
+            cs, ce = self._try_merge(
+                content, packed, cs, ce, s, e,
+            )
+        packed.append((cs, ce))
+        return packed
+
+    def _try_merge(
+        self, content: str, packed: List[Span],
+        cs: int, ce: int, s: int, e: int,
+    ) -> Span:
+        ws: bool = content[ce:s].strip() == ""
+        if ws and e - cs <= self._max:
+            return cs, e
+        packed.append((cs, ce))
+        return s, e
+
+    def filter_empty(
+        self, content: str, spans: List[Span],
+    ) -> List[Span]:
+        return [
+            (s, e) for s, e in spans
+            if s < e and content[s:e].strip()
+        ]
+
+    def emit(
+        self, fp: str, content: str,
+        spans: List[Span],
     ) -> List[MinimalSource]:
-        ...
+        clean: List[Span] = self.filter_empty(
+            content, spans,
+        )
+        packed: List[Span] = self.pack(
+            content, clean,
+        )
+        return self._emit_all(fp, content, packed)
 
-    def _build_line_offsets(
-        self,
-        content: str,
-    ) -> List[int]:
-        offsets: List[int] = [0]
-        for i, ch in enumerate(content):
-            if ch == "\n":
-                offsets.append(i + 1)
-        return offsets
+    def _emit_all(
+        self, fp: str, content: str,
+        packed: List[Span],
+    ) -> List[MinimalSource]:
+        result: List[MinimalSource] = []
+        for s, e in packed:
+            if e - s <= self._max:
+                result.append(self._src(fp, s, e))
+            else:
+                result.extend(
+                    self._split_nl(fp, content, s, e),
+                )
+        return result
 
-    def _find_newline_split(
-        self,
-        content: str,
-        start: int,
-        end: int,
-    ) -> int:
-        limit: int = start + self._max_chunk_size
-        candidate: int = content.rfind("\n", start, limit)
-        if candidate > start:
-            return candidate + 1
-        return limit
-
-    def _fallback_split(
-        self,
-        file_path: str,
-        content: str,
-        start: int,
-        end: int,
+    def _split_nl(
+        self, fp: str, content: str,
+        start: int, end: int,
     ) -> List[MinimalSource]:
         chunks: List[MinimalSource] = []
         pos: int = start
         while pos < end:
-            if end - pos <= self._max_chunk_size:
-                chunks.append(self._make_source(
-                    file_path, pos, end,
-                ))
-                break
-            split: int = self._find_newline_split(
-                content, pos, end,
-            )
-            split = min(split, end)
-            chunks.append(self._make_source(
-                file_path, pos, split,
-            ))
-            pos = split
+            cut: int = self._cut(content, pos, end)
+            chunks.append(self._src(fp, pos, cut))
+            pos = cut
         return chunks
 
-    def _emit_or_split(
-        self,
-        file_path: str,
-        content: str,
-        start: int,
-        end: int,
-    ) -> List[MinimalSource]:
-        size: int = end - start
-        if size <= 0:
-            return []
-        if size <= self._max_chunk_size:
-            return [self._make_source(
-                file_path, start, end,
-            )]
-        return self._fallback_split(
-            file_path, content, start, end,
-        )
+    def _cut(
+        self, content: str, pos: int, end: int,
+    ) -> int:
+        if end - pos <= self._max:
+            return end
+        limit: int = pos + self._max
+        nl: int = content.rfind("\n", pos, limit)
+        return nl + 1 if nl > pos else min(limit, end)
 
-    def _make_source(
-        self,
-        file_path: str,
-        start: int,
-        end: int,
+    def _src(
+        self, fp: str, start: int, end: int,
     ) -> MinimalSource:
         return MinimalSource(
-            file_path=file_path,
+            file_path=fp,
             first_character_index=start,
             last_character_index=end,
         )
 
-    def _pack_spans(
-        self,
-        content: str,
-        spans: List[Tuple[int, int]],
-    ) -> List[Tuple[int, int]]:
-        if not spans:
-            return []
-        packed: List[Tuple[int, int]] = []
-        cur_start, cur_end = spans[0]
-        for start, end in spans[1:]:
-            merged: int = end - cur_start
-            gap_empty: bool = (
-                content[cur_end:start].strip() == ""
-            )
-            if gap_empty and merged <= self._max_chunk_size:
-                cur_end = end
-            else:
-                packed.append((cur_start, cur_end))
-                cur_start, cur_end = start, end
-        packed.append((cur_start, cur_end))
-        return packed
 
-    def _is_whitespace_only(
-        self,
-        content: str,
-        start: int,
-        end: int,
-    ) -> bool:
-        return content[start:end].strip() == ""
+class BaseChunker(ABC):
 
-    def _filter_empty_spans(
-        self,
-        content: str,
-        spans: List[Tuple[int, int]],
-    ) -> List[Tuple[int, int]]:
-        return [
-            (s, e) for s, e in spans
-            if s < e and not self._is_whitespace_only(
-                content, s, e,
-            )
-        ]
+    def __init__(
+        self, max_chunk_size: int = 2000,
+    ) -> None:
+        self._max_chunk_size: int = max_chunk_size
+        self._packer: SpanPacker = SpanPacker(
+            max_chunk_size,
+        )
 
-    def _spans_to_chunks(
-        self,
-        file_path: str,
-        content: str,
-        spans: List[Tuple[int, int]],
+    @abstractmethod
+    def chunk(
+        self, file_path: str, content: str,
     ) -> List[MinimalSource]:
-        clean: List[Tuple[int, int]] = (
-            self._filter_empty_spans(content, spans)
-        )
-        packed: List[Tuple[int, int]] = self._pack_spans(
-            content, clean,
-        )
-        chunks: List[MinimalSource] = []
-        for start, end in packed:
-            chunks.extend(
-                self._emit_or_split(
-                    file_path, content, start, end,
-                )
-            )
-        return chunks
+        ...
