@@ -1,138 +1,321 @@
-"""AST-based Python file chunker implementing the BaseChunker strategy."""
-
-from __future__ import annotations
-
 import ast
-from pathlib import Path
-from typing import Iterator, Union
 
-from .base import BaseChunker, Chunk
+from typing import List, Tuple
 
-
-_STRUCTURAL_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-_StructuralNode = Union[ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef]
+from .base import BaseChunker
+from ..models import MinimalSource
 
 
 class PythonChunker(BaseChunker):
-    """Chunks Python source by function and class definitions.
 
-    Each definition becomes its own chunk, kept together with any
-    decorators it carries. A class that would still exceed
-    ``max_chunk_size`` is recursively split method by method instead
-    of being cut at an arbitrary character offset.
-    """
+    def __init__(self, max_chunk_size: int = 2000) -> None:
+        super().__init__(max_chunk_size)
+        self._content: str = ""
+        self._line_offsets: List[int] = []
 
-    def chunk(self, file_path: Path, content: str) -> Iterator[Chunk]:
-        """Yield chunks for *content* parsed as a Python source file."""
+    def chunk(
+        self,
+        file_path: str,
+        content: str,
+    ) -> List[MinimalSource]:
+        self._content = content
+        self._line_offsets = self._build_line_offsets(
+            content,
+        )
         try:
-            tree = ast.parse(content)
+            tree: ast.Module = ast.parse(content)
         except SyntaxError:
-            yield from self._split_by_size(content, 0, str(file_path))
-            return
-
-        line_offsets = self._build_line_offsets(content)
-        yield from self._emit_body(
-            content, tree.body, 0, len(content), line_offsets, str(file_path),
-        )
-
-    @staticmethod
-    def _build_line_offsets(source: str) -> list[int]:
-        """Return char offset of the start of each line (0-indexed list)."""
-        offsets: list[int] = [0]
-        for i, ch in enumerate(source):
-            if ch == "\n" and i + 1 < len(source):
-                offsets.append(i + 1)
-        return offsets
-
-    @staticmethod
-    def _node_span(
-        source: str,
-        node: _StructuralNode,
-        line_offsets: list[int],
-    ) -> tuple[int, str]:
-        """Return ``(start_char, text)`` for *node*, decorators included.
-
-        ``node.lineno`` points at the ``def``/``class`` keyword, not at
-        any decorator above it, so a decorated definition would
-        otherwise be split from its decorators. Starting from the
-        first decorator's line (when present) keeps them together.
-        """
-        start_line = (
-            node.decorator_list[0].lineno
-            if node.decorator_list
-            else node.lineno
-        )
-        start = line_offsets[start_line - 1]
-        end_lineno = (
-            node.end_lineno if node.end_lineno is not None else start_line
-        )
-        end = (
-            line_offsets[end_lineno]
-            if end_lineno < len(line_offsets)
-            else len(source)
-        )
-        return start, source[start:end]
-
-    def _emit_node(
-        self,
-        source: str,
-        node: _StructuralNode,
-        start: int,
-        text: str,
-        line_offsets: list[int],
-        file_path: str,
-    ) -> Iterator[Chunk]:
-        """Yield one or more size-capped chunks for a single AST *node*."""
-        if len(text) <= self.max_chunk_size:
-            yield Chunk.spanning(file_path, start, text)
-            return
-        if isinstance(node, ast.ClassDef):
-            yield from self._emit_body(
-                source, node.body, start, start + len(text),
-                line_offsets, file_path,
+            return self._line_fallback(
+                file_path, content,
             )
-        else:
-            yield from self._split_by_size(text, start, file_path)
+        spans: List[Tuple[int, int]] = (
+            self._extract_spans(tree)
+        )
+        filled: List[Tuple[int, int]] = (
+            self._fill_gaps(spans)
+        )
+        return self._spans_to_chunks(
+            file_path, content, filled,
+        )
 
-    def _emit_gap(
+    def _line_fallback(
         self,
-        source: str,
-        gap_start: int,
-        gap_end: int,
         file_path: str,
-    ) -> Iterator[Chunk]:
-        """Yield chunks for the gap of source text between two nodes."""
-        gap = source[gap_start:gap_end]
-        if gap.strip():
-            yield from self._split_by_size(gap, gap_start, file_path)
+        content: str,
+    ) -> List[MinimalSource]:
+        spans: List[Tuple[int, int]] = (
+            self._paragraph_spans(content)
+        )
+        return self._spans_to_chunks(
+            file_path, content, spans,
+        )
 
-    def _emit_body(
+    def _paragraph_spans(
         self,
-        source: str,
-        body: list[ast.stmt],
-        region_start: int,
-        region_end: int,
-        line_offsets: list[int],
-        file_path: str,
-    ) -> Iterator[Chunk]:
-        """Walk one AST body (a module or a class), in document order.
+        content: str,
+    ) -> List[Tuple[int, int]]:
+        parts: List[str] = content.split("\n\n")
+        spans: List[Tuple[int, int]] = []
+        pos: int = 0
+        total: int = len(content)
+        for part in parts:
+            end: int = pos + len(part)
+            if end < total:
+                end += 2
+            end = min(end, total)
+            spans.append((pos, end))
+            pos = end
+        return spans
 
-        Used both for the module's top level and, recursively, for the
-        body of a class that turned out too large to keep as one chunk
-        -- so an oversized class is split along its methods rather than
-        at a character offset that could land mid-statement.
-        """
-        covered_up_to = region_start
-        for node in body:
-            if not isinstance(node, _STRUCTURAL_NODES):
+    def _line_col_to_offset(
+        self,
+        line: int,
+        col: int,
+    ) -> int:
+        return self._line_offsets[line - 1] + col
+
+    def _node_start(self, node: ast.stmt) -> int:
+        return self._line_col_to_offset(
+            node.lineno,
+            node.col_offset,
+        )
+
+    def _node_end(self, node: ast.stmt) -> int:
+        assert node.end_lineno is not None
+        assert node.end_col_offset is not None
+        return self._line_col_to_offset(
+            node.end_lineno,
+            node.end_col_offset,
+        )
+
+    def _extract_spans(
+        self,
+        tree: ast.Module,
+    ) -> List[Tuple[int, int]]:
+        spans: List[Tuple[int, int]] = []
+        group_start: int = -1
+        group_end: int = -1
+        for node in ast.iter_child_nodes(tree):
+            if not isinstance(node, ast.stmt):
                 continue
-            start, text = self._node_span(source, node, line_offsets)
-            yield from self._emit_gap(source, covered_up_to, start, file_path)
-            yield from self._emit_node(
-                source, node, start, text, line_offsets, file_path,
+            if self._is_compound(node):
+                group_start, group_end = (
+                    self._flush_group(
+                        spans, group_start, group_end,
+                    )
+                )
+                spans.extend(self._node_spans(node))
+            else:
+                ns: int = self._node_start(node)
+                ne: int = self._node_end(node)
+                if group_start < 0:
+                    group_start, group_end = ns, ne
+                else:
+                    group_end = ne
+        self._flush_group(
+            spans, group_start, group_end,
+        )
+        return spans
+
+    def _is_compound(self, node: ast.stmt) -> bool:
+        return isinstance(
+            node,
+            (
+                ast.ClassDef,
+                ast.FunctionDef,
+                ast.AsyncFunctionDef,
+            ),
+        )
+
+    def _flush_group(
+        self,
+        spans: List[Tuple[int, int]],
+        start: int,
+        end: int,
+    ) -> Tuple[int, int]:
+        if start >= 0:
+            spans.append((start, end))
+        return -1, -1
+
+    def _node_spans(
+        self,
+        node: ast.stmt,
+    ) -> List[Tuple[int, int]]:
+        start: int = self._node_start(node)
+        end: int = self._node_end(node)
+        size: int = end - start
+        if isinstance(node, ast.ClassDef):
+            return self._class_spans(node, size)
+        if self._is_func(node) and size > self._max_chunk_size:
+            return self._decompose_func(node)
+        return [(start, end)]
+
+    def _is_func(self, node: ast.stmt) -> bool:
+        return isinstance(
+            node, (ast.FunctionDef, ast.AsyncFunctionDef),
+        )
+
+    def _class_spans(
+        self,
+        node: ast.ClassDef,
+        size: int,
+    ) -> List[Tuple[int, int]]:
+        if size <= self._max_chunk_size:
+            return [(
+                self._node_start(node),
+                self._node_end(node),
+            )]
+        return self._decompose_class(node)
+
+    def _decompose_class(
+        self,
+        node: ast.ClassDef,
+    ) -> List[Tuple[int, int]]:
+        methods: List[ast.stmt] = [
+            c for c in ast.iter_child_nodes(node)
+            if isinstance(c, ast.stmt) and self._is_func(c)
+        ]
+        if not methods:
+            return [(
+                self._node_start(node),
+                self._node_end(node),
+            )]
+        return self._split_class(node, methods)
+
+    def _split_class(
+        self,
+        node: ast.ClassDef,
+        methods: List[ast.stmt],
+    ) -> List[Tuple[int, int]]:
+        spans: List[Tuple[int, int]] = []
+        cls_start: int = self._node_start(node)
+        cls_end: int = self._node_end(node)
+        first_m: int = self._node_start(methods[0])
+        if first_m > cls_start:
+            spans.append((cls_start, first_m))
+        spans.extend(
+            self._method_spans(methods, cls_end),
+        )
+        return spans
+
+    def _method_spans(
+        self,
+        methods: List[ast.stmt],
+        cls_end: int,
+    ) -> List[Tuple[int, int]]:
+        spans: List[Tuple[int, int]] = []
+        for i, method in enumerate(methods):
+            m_start: int = self._node_start(method)
+            m_end: int = self._method_end(
+                methods, i, cls_end,
             )
-            covered_up_to = start + len(text)
-        if covered_up_to < region_end:
-            yield from self._emit_gap(
-                source, covered_up_to, region_end, file_path,
-            )
+            if self._is_func(method):
+                spans.extend(
+                    self._maybe_decompose_func(
+                        method, m_start, m_end,
+                    )
+                )
+            else:
+                spans.append((m_start, m_end))
+        return spans
+
+    def _method_end(
+        self,
+        methods: List[ast.stmt],
+        i: int,
+        cls_end: int,
+    ) -> int:
+        if i + 1 < len(methods):
+            return self._node_start(methods[i + 1])
+        return cls_end
+
+    def _maybe_decompose_func(
+        self,
+        node: ast.stmt,
+        start: int,
+        end: int,
+    ) -> List[Tuple[int, int]]:
+        if end - start <= self._max_chunk_size:
+            return [(start, end)]
+        return self._decompose_func(node)
+
+    def _decompose_func(
+        self,
+        node: ast.stmt,
+    ) -> List[Tuple[int, int]]:
+        body: List[ast.stmt] = getattr(node, "body", [])
+        if not body:
+            return [(
+                self._node_start(node),
+                self._node_end(node),
+            )]
+        return self._split_func_body(node, body)
+
+    def _split_func_body(
+        self,
+        node: ast.stmt,
+        body: List[ast.stmt],
+    ) -> List[Tuple[int, int]]:
+        func_start: int = self._node_start(node)
+        func_end: int = self._node_end(node)
+        first_stmt: int = self._node_start(body[0])
+        spans: List[Tuple[int, int]] = []
+        if first_stmt > func_start:
+            spans.append((func_start, first_stmt))
+        spans.extend(self._greedy_group(body, func_end))
+        return spans
+
+    def _greedy_group(
+        self,
+        stmts: List[ast.stmt],
+        container_end: int,
+    ) -> List[Tuple[int, int]]:
+        spans: List[Tuple[int, int]] = []
+        g_start: int = self._node_start(stmts[0])
+        g_end: int = self._node_end(stmts[0])
+        for stmt in stmts[1:]:
+            s_end: int = self._node_end(stmt)
+            if s_end - g_start <= self._max_chunk_size:
+                g_end = s_end
+            else:
+                spans.append((g_start, g_end))
+                g_start = self._node_start(stmt)
+                g_end = s_end
+        spans.append((g_start, max(g_end, container_end)))
+        return spans
+
+    def _fill_gaps(
+        self,
+        spans: List[Tuple[int, int]],
+    ) -> List[Tuple[int, int]]:
+        if not spans:
+            return self._handle_empty()
+        filled: List[Tuple[int, int]] = []
+        if spans[0][0] > 0:
+            filled.append((0, spans[0][0]))
+        filled.extend(self._fill_inter_gaps(spans))
+        total: int = len(self._content)
+        if spans[-1][1] < total:
+            filled.append((spans[-1][1], total))
+        return filled
+
+    def _handle_empty(
+        self,
+    ) -> List[Tuple[int, int]]:
+        total: int = len(self._content)
+        if total > 0:
+            return [(0, total)]
+        return []
+
+    def _fill_inter_gaps(
+        self,
+        spans: List[Tuple[int, int]],
+    ) -> List[Tuple[int, int]]:
+        filled: List[Tuple[int, int]] = []
+        prev_end: int = spans[0][0]
+        for start, end in spans:
+            if start > prev_end:
+                filled.append((prev_end, start))
+            filled.append((start, end))
+            prev_end = end
+        return filled
