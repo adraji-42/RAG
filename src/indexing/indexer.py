@@ -12,6 +12,7 @@ from ..models import MinimalSource
 _EXT_MAP: Dict[str, Type[BaseChunker]] = {
     ".py": PythonChunker,
     ".md": MarkdownChunker,
+    ".txt": MarkdownChunker,
 }
 
 
@@ -23,60 +24,74 @@ class Indexer:
         raw_dir: str = "data/raw",
         processed_dir: str = "data/processed",
     ) -> None:
-        self._max_chunk_size: int = max_chunk_size
-        self._raw_dir: str = raw_dir
-        self._processed_dir: str = processed_dir
-        self._chunkers: Dict[str, BaseChunker] = {
+        self.__max_chunk_size: int = max_chunk_size
+        self.__raw_dir: str = raw_dir
+        self.__processed_dir: str = processed_dir
+        self.__chunkers: Dict[str, BaseChunker] = {
             ext: cls(max_chunk_size)
             for ext, cls in _EXT_MAP.items()
         }
-        self._chunks: List[MinimalSource] = []
+        self.__chunks: List[MinimalSource] = []
+
+    @property
+    def max_chunk_size(self) -> int:
+        return self.__max_chunk_size
+
+    @property
+    def raw_dir(self) -> str:
+        return self.__raw_dir
+
+    @property
+    def processed_dir(self) -> str:
+        return self.__processed_dir
+
+    @property
+    def chunkers(self) -> Dict[str, BaseChunker]:
+        return self.__chunkers
+
+    @property
+    def chunks(self) -> List[MinimalSource]:
+        return self.__chunks
 
     def run(self) -> List[MinimalSource]:
-        os.makedirs(self._processed_dir, exist_ok=True)
-        files: List[str] = self._discover_files()
-        self._chunks = self._chunk_files(files)
+        os.makedirs(self.__processed_dir, exist_ok=True)
+        files: List[str] = self.__discover_files()
+        self.__chunks = self.__chunk_files(files)
         invalid: int = sum(
-            1 for c in self._chunks
+            1 for c in self.__chunks
             if not 0 < (
                 c.last_character_index
                 - c.first_character_index
-            ) <= self._max_chunk_size
+            ) <= self.__max_chunk_size
         )
         status: str = (
             "PASS (all chunks valid)"
             if invalid == 0
             else f"FAIL ({invalid} invalid chunks)"
         )
-        print(f"Files scanned: {len(files)}")
-        print(f"Chunks generated: {len(self._chunks)}")
+        print(f"Chunks generated: {len(self.__chunks)}")
         print(f"Sanity: {status}")
-        return self._chunks
+        return self.__chunks
 
-    def _discover_files(self) -> List[str]:
+    def __discover_files(self) -> List[str]:
         found: List[str] = []
-        for root, dirs, names in os.walk(self._raw_dir):
-            dirs.sort()
-            for name in sorted(names):
-                if Path(name).suffix in self._chunkers:
-                    found.append(
-                        os.path.normpath(
-                            os.path.join(root, name),
-                        ),
-                    )
+        for root, _, names in os.walk(self.__raw_dir):
+            for name in names:
+                if Path(name).suffix in self.__chunkers:
+                    found.append(os.path.normpath(os.path.join(root, name)))
         return found
 
-    def _chunk_files(
+    def __chunk_files(
         self, files: List[str],
     ) -> List[MinimalSource]:
         chunks: List[MinimalSource] = []
         for file_path in tqdm(
             files, desc="Chunking", unit="file",
         ):
-            content: str = self._read_file(file_path)
+            content: str = self.__read_file(file_path)
             if not content:
                 continue
-            chunker: BaseChunker = self._chunkers[
+            chunker: BaseChunker = self.__chunkers[
                 Path(file_path).suffix
             ]
             chunks.extend(
@@ -84,15 +99,11 @@ class Indexer:
             )
         return chunks
 
-    def _read_file(self, file_path: str) -> str:
+    def __read_file(self, file_path: str) -> str:
         try:
             with open(
-                file_path,
-                "r",
-                encoding="utf-8",
-                errors="replace",
-                newline="",
-            ) as handle:
-                return handle.read()
+                file_path, "r", encoding="utf-8", errors="replace", newline=""
+            ) as file:
+                return file.read()
         except OSError:
             return ""

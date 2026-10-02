@@ -11,7 +11,11 @@ class BaseChunker(ABC):
     def __init__(
         self, max_chunk_size: int = 2000,
     ) -> None:
-        self._max_chunk_size: int = max_chunk_size
+        self.__max_chunk_size: int = max_chunk_size
+
+    @property
+    def max_chunk_size(self) -> int:
+        return self.__max_chunk_size
 
     @abstractmethod
     def chunk(
@@ -19,27 +23,7 @@ class BaseChunker(ABC):
     ) -> List[MinimalSource]:
         ...
 
-    def _pack(
-        self, content: str, spans: List[Span],
-    ) -> List[Span]:
-        clean: List[Span] = [
-            (s, e) for s, e in spans
-            if s < e and content[s:e].strip()
-        ]
-        if not clean:
-            return []
-        packed: List[Span] = []
-        cs, ce = clean[0]
-        for s, e in clean[1:]:
-            if content[ce:s].strip() == "" and e - cs <= self._max_chunk_size:
-                ce = e
-            else:
-                packed.append((cs, ce))
-                cs, ce = s, e
-        packed.append((cs, ce))
-        return packed
-
-    def _split_paragraphs(
+    def split_paragraphs(
         self, text: str, start: int, end: int,
     ) -> List[Span]:
         parts: List[str] = text[start:end].split("\n\n")
@@ -55,13 +39,13 @@ class BaseChunker(ABC):
             pos = min(se, end)
         return spans
 
-    def _emit(
+    def emit(
         self, fp: str, content: str, spans: List[Span],
     ) -> List[MinimalSource]:
-        packed: List[Span] = self._pack(content, spans)
+        packed: List[Span] = self.__pack(content, spans)
         result: List[MinimalSource] = []
         for s, e in packed:
-            if e - s <= self._max_chunk_size:
+            if e - s <= self.__max_chunk_size:
                 result.append(MinimalSource(
                     file_path=fp,
                     first_character_index=s,
@@ -69,21 +53,44 @@ class BaseChunker(ABC):
                 ))
             else:
                 result.extend(
-                    self._split_newlines(fp, content, s, e),
+                    self.__split_newlines(fp, content, s, e),
                 )
         return result
 
-    def _split_newlines(
+    def __pack(
+        self, content: str, spans: List[Span],
+    ) -> List[Span]:
+        clean: List[Span] = [
+            (s, e) for s, e in spans
+            if s < e and content[s:e].strip()
+        ]
+        if not clean:
+            return []
+        packed: List[Span] = []
+        cs, ce = clean[0]
+        for s, e in clean[1:]:
+            if (
+                content[ce:s].strip() == ""
+                and e - cs <= self.__max_chunk_size
+            ):
+                ce = e
+            else:
+                packed.append((cs, ce))
+                cs, ce = s, e
+        packed.append((cs, ce))
+        return packed
+
+    def __split_newlines(
         self, fp: str, content: str,
         start: int, end: int,
     ) -> List[MinimalSource]:
         chunks: List[MinimalSource] = []
         pos: int = start
         while pos < end:
-            if end - pos <= self._max_chunk_size:
+            if end - pos <= self.__max_chunk_size:
                 cut: int = end
             else:
-                limit: int = pos + self._max_chunk_size
+                limit: int = pos + self.__max_chunk_size
                 nl: int = content.rfind("\n", pos, limit)
                 cut = nl + 1 if nl > pos else min(limit, end)
             chunks.append(MinimalSource(

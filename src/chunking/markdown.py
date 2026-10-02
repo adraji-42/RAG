@@ -1,103 +1,10 @@
-import re
 from typing import List, Tuple
+from markdown_it import MarkdownIt
+from markdown_it.token import Token
 
 from .base import BaseChunker, Span
 from .line_map import LineMap
 from ..models import MinimalSource
-
-_FENCE_RE: re.Pattern[str] = re.compile(r"^(`{3,}|~{3,})")
-_ATX_RE: re.Pattern[str] = re.compile(r"^(#{1,6})(?:\s|$)")
-_SETEXT_H1: re.Pattern[str] = re.compile(r"^=+\s*$")
-_SETEXT_H2: re.Pattern[str] = re.compile(r"^-+\s*$")
-
-
-class FenceScanner:
-
-    def __init__(self, lines: List[str]) -> None:
-        self._lines: List[str] = lines
-        self.mask: List[bool] = []
-        in_f: bool = False
-        mk: str = ""
-        for line in lines:
-            m: re.Match[str] | None = _FENCE_RE.match(
-                line.strip(),
-            )
-            if m is not None:
-                tok: str = m.group(1)
-                if not in_f:
-                    in_f, mk = True, tok[0]
-                elif tok[0] == mk and len(tok) >= 3:
-                    in_f, mk = False, ""
-            self.mask.append(in_f)
-
-    def boundaries(
-        self, lmap: LineMap,
-        first: int, last: int, span_start: int,
-    ) -> List[int]:
-        bounds: List[int] = []
-        inside: bool = False
-        for idx in range(first, last + 1):
-            off: int = lmap.line_start(idx)
-            is_fence: bool = bool(
-                _FENCE_RE.match(self._lines[idx].strip()),
-            )
-            if off <= span_start:
-                inside = not inside if is_fence else inside
-                continue
-            if not is_fence:
-                continue
-            if not inside:
-                bounds.append(lmap.line_start(idx))
-                inside = True
-            else:
-                bounds.append(lmap.line_start(idx + 1))
-                inside = False
-        return bounds
-
-
-class HeadingScanner:
-
-    def __init__(
-        self, lines: List[str],
-        fence_mask: List[bool],
-    ) -> None:
-        self._lines: List[str] = lines
-        self._mask: List[bool] = fence_mask
-
-    def level(self, idx: int) -> int:
-        if self._mask[idx]:
-            return 0
-        atx: re.Match[str] | None = _ATX_RE.match(
-            self._lines[idx],
-        )
-        if atx:
-            return len(atx.group(1))
-        if idx + 1 >= len(self._lines):
-            return 0
-        if not self._lines[idx].strip():
-            return 0
-        nxt: str = self._lines[idx + 1]
-        if _SETEXT_H1.match(nxt):
-            return 1
-        return 2 if _SETEXT_H2.match(nxt) else 0
-
-    def find(
-        self, lmap: LineMap,
-        start: int, end: int, plvl: int,
-    ) -> List[Tuple[int, int]]:
-        first: int = lmap.line_at(start)
-        last: int = lmap.line_at(end - 1)
-        cands: List[Tuple[int, int]] = []
-        for i in range(first, last + 1):
-            if lmap.line_start(i) <= start:
-                continue
-            lv: int = self.level(i)
-            if lv > plvl:
-                cands.append((lv, i))
-        if not cands:
-            return []
-        bv: int = min(v for v, _ in cands)
-        return [(v, i) for v, i in cands if v == bv]
 
 
 class MarkdownChunker(BaseChunker):
@@ -106,109 +13,140 @@ class MarkdownChunker(BaseChunker):
         self, max_chunk_size: int = 2000,
     ) -> None:
         super().__init__(max_chunk_size)
-        self._content: str = ""
-        self._lmap: LineMap = LineMap("")
-        self._fences: FenceScanner = FenceScanner([])
-        self._heads: HeadingScanner = (
-            HeadingScanner([], [])
-        )
+        self.__md: MarkdownIt = MarkdownIt()
+        self.__content: str
+        self.__lmap: LineMap
+        self.__headings: List[Tuple[int, int]]
+        self.__fences: List[Span]
 
     def chunk(
         self, file_path: str, content: str,
     ) -> List[MinimalSource]:
-        self._content = content
-        lines: List[str] = content.split("\n")
-        self._lmap = LineMap(content)
-        self._fences = FenceScanner(lines)
-        self._heads = HeadingScanner(
-            lines, self._fences.mask,
+        self.__content = content
+        self.__lmap = LineMap(content)
+        tokens: List[Token] = self.__md.parse(self.__content)
+        self.__headings = []
+        self.__fences = []
+        for tok in tokens:
+            if tok.type == "heading_open" and tok.map:
+                lv: int = int(tok.tag[1:])
+                off: int = self.__lmap.line_start(
+                    tok.map[0],
+                )
+                self.__headings.append((lv, off))
+            elif tok.type in ("fence", "code_block"):
+                if tok.map:
+                    s: int = self.__lmap.line_start(tok.map[0])
+                    e: int = self.__lmap.line_start(tok.map[1])
+                    self.__fences.append((s, e))
+        spans: List[Span] = self.__split(
+            0, len(self.__content), 0,
         )
-        spans: List[Span] = self._split(
-            0, len(content), 0,
-        )
-        return self._emit(file_path, content, spans)
+        return self.emit(file_path, content, spans)
 
-    def _split(
+    def __split(
         self, start: int, end: int, plvl: int,
     ) -> List[Span]:
-        if end - start <= self._max_chunk_size:
+        if end - start <= self.max_chunk_size:
             return [(start, end)]
-        hdgs: List[Tuple[int, int]] = (
-            self._heads.find(
-                self._lmap, start, end, plvl,
-            )
+        pts: List[int] = self.__heading_pts(
+            start, end, plvl,
         )
-        if hdgs:
-            return self._at_hdgs(start, end, hdgs)
-        return self._fallback(start, end)
+        if pts:
+            return self.__split_at_pts(
+                start, end, pts, plvl,
+            )
+        return self.__fallback(start, end)
 
-    def _at_hdgs(
-        self, start: int, end: int,
-        hdgs: List[Tuple[int, int]],
-    ) -> List[Span]:
-        lv: int = hdgs[0][0]
-        pts: List[int] = [
-            self._lmap.line_start(i) for _, i in hdgs
+    def __heading_pts(
+        self, start: int, end: int, plvl: int,
+    ) -> List[int]:
+        cands: List[Tuple[int, int]] = [
+            (lv, off) for lv, off in self.__headings
+            if start < off < end and lv > plvl
         ]
+        if not cands:
+            return []
+        best: int = min(lv for lv, _ in cands)
+        return [off for lv, off in cands if lv == best]
+
+    def __split_at_pts(
+        self, start: int, end: int,
+        pts: List[int], plvl: int,
+    ) -> List[Span]:
+        best: int = min(
+            lv for lv, off in self.__headings
+            if off in pts
+        )
         spans: List[Span] = []
         prev: int = start
         for p in pts:
             if p > prev:
-                spans.extend(self._split(prev, p, lv))
+                spans.extend(
+                    self.__split(prev, p, best),
+                )
             prev = p
         if prev < end:
-            spans.extend(self._split(prev, end, lv))
+            spans.extend(
+                self.__split(prev, end, best),
+            )
         return spans
 
-    def _fallback(
+    def __fallback(
         self, start: int, end: int,
     ) -> List[Span]:
-        fb: List[int] = self._fences.boundaries(
-            self._lmap, self._lmap.line_at(start),
-            self._lmap.line_at(end - 1), start,
-        )
+        fb: List[Span] = [
+            (s, e) for s, e in self.__fences
+            if start < s < end or start < e < end
+        ]
         if fb:
-            fs: List[Span] = self._bounds_to_spans(
-                fb, start, end,
-            )
-            if self._is_useful(fs, start, end):
-                return self._recurse_fallback(fs)
-        ps: List[Span] = self._split_paragraphs(
-            self._content, start, end,
+            fs = self.__fence_spans(fb, start, end)
+            if self.__is_useful(fs, start, end):
+                return self.__recurse_fallback(fs)
+        ps: List[Span] = self.split_paragraphs(
+            self.__content, start, end,
         )
-        if self._is_useful(ps, start, end):
-            return self._recurse_fallback(ps)
+        if self.__is_useful(ps, start, end):
+            return self.__recurse_fallback(ps)
         return [(start, end)]
 
-    def _is_useful(
-        self, spans: List[Span],
-        start: int, end: int,
-    ) -> bool:
-        if len(spans) <= 1:
-            return False
-        return max(e - s for s, e in spans) < end - start
-
-    def _recurse_fallback(
-        self, spans: List[Span],
-    ) -> List[Span]:
-        result: List[Span] = []
-        for s, e in spans:
-            if e - s <= self._max_chunk_size:
-                result.append((s, e))
-            else:
-                result.extend(self._fallback(s, e))
-        return result
-
-    def _bounds_to_spans(
-        self, bounds: List[int],
+    def __fence_spans(
+        self, fb: List[Span],
         start: int, end: int,
     ) -> List[Span]:
+        bounds: List[int] = []
+        for s, e in fb:
+            if s > start:
+                bounds.append(s)
+            if e < end:
+                bounds.append(e)
         spans: List[Span] = []
         prev: int = start
-        for b in bounds:
+        for b in sorted(set(bounds)):
             if b > prev:
                 spans.append((prev, b))
             prev = b
         if prev < end:
             spans.append((prev, end))
         return spans
+
+    def __is_useful(
+        self, spans: List[Span],
+        start: int, end: int,
+    ) -> bool:
+        if len(spans) <= 1:
+            return False
+        return (
+            max(e - s for s, e in spans) < end - start
+        )
+
+    def __recurse_fallback(
+        self, spans: List[Span],
+    ) -> List[Span]:
+        result: List[Span] = []
+        for s, e in spans:
+            if e - s <= self.max_chunk_size:
+                result.append((s, e))
+            else:
+                result.extend(self.__fallback(s, e))
+        return result
