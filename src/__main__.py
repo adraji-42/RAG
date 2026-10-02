@@ -9,6 +9,9 @@ def main() -> None:
         fire.Fire(Cli)
     except KeyboardInterrupt:
         sys.exit(130)
+    except Exception as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)
 
 
 main()

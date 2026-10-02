@@ -11,8 +11,16 @@ class AstSpanExtractor:
     def __init__(
         self, lmap: LineMap, max_size: int,
     ) -> None:
-        self._lmap: LineMap = lmap
-        self._max: int = max_size
+        self.__lmap: LineMap = lmap
+        self.__max: int = max_size
+
+    @property
+    def lmap(self) -> LineMap:
+        return self.__lmap
+
+    @property
+    def max_size(self) -> int:
+        return self.__max
 
     def extract(self, tree: ast.Module) -> List[Span]:
         spans: List[Span] = []
@@ -27,11 +35,11 @@ class AstSpanExtractor:
             )):
                 if gs >= 0:
                     spans.append((gs, ge))
-                spans.extend(self._compound(node))
+                spans.extend(self.__compound(node))
                 gs, ge = -1, -1
             else:
-                ns: int = self._offset_start(node)
-                ne: int = self._offset_end(node)
+                ns: int = self.__offset_start(node)
+                ne: int = self.__offset_end(node)
                 if gs < 0:
                     gs, ge = ns, ne
                 else:
@@ -40,28 +48,28 @@ class AstSpanExtractor:
             spans.append((gs, ge))
         return spans
 
-    def _offset_start(self, node: ast.stmt) -> int:
-        return self._lmap.offset(
+    def __offset_start(self, node: ast.stmt) -> int:
+        return self.__lmap.offset(
             node.lineno, node.col_offset,
         )
 
-    def _offset_end(self, node: ast.stmt) -> int:
+    def __offset_end(self, node: ast.stmt) -> int:
         assert node.end_lineno is not None
         assert node.end_col_offset is not None
-        return self._lmap.offset(
+        return self.__lmap.offset(
             node.end_lineno, node.end_col_offset,
         )
 
-    def _compound(self, node: ast.stmt) -> List[Span]:
-        s: int = self._offset_start(node)
-        e: int = self._offset_end(node)
-        if isinstance(node, ast.ClassDef) and e - s > self._max:
-            return self._split_cls(node)
-        if not isinstance(node, ast.ClassDef) and e - s > self._max:
-            return self._split_fn(node)
+    def __compound(self, node: ast.stmt) -> List[Span]:
+        s: int = self.__offset_start(node)
+        e: int = self.__offset_end(node)
+        if isinstance(node, ast.ClassDef) and e - s > self.__max:
+            return self.__split_cls(node)
+        if not isinstance(node, ast.ClassDef) and e - s > self.__max:
+            return self.__split_fn(node)
         return [(s, e)]
 
-    def _split_cls(
+    def __split_cls(
         self, node: ast.ClassDef,
     ) -> List[Span]:
         ms: List[ast.stmt] = [
@@ -72,47 +80,47 @@ class AstSpanExtractor:
             ))
         ]
         if not ms:
-            return [(self._offset_start(node), self._offset_end(node))]
+            return [(self.__offset_start(node), self.__offset_end(node))]
         spans: List[Span] = []
-        cs: int = self._offset_start(node)
-        fm: int = self._offset_start(ms[0])
+        cs: int = self.__offset_start(node)
+        fm: int = self.__offset_start(ms[0])
         if fm > cs:
             spans.append((cs, fm))
-        cls_end: int = self._offset_end(node)
+        cls_end: int = self.__offset_end(node)
         for i, m in enumerate(ms):
-            ms_start: int = self._offset_start(m)
+            ms_start: int = self.__offset_start(m)
             ms_end: int = (
-                self._offset_start(ms[i + 1])
+                self.__offset_start(ms[i + 1])
                 if i + 1 < len(ms) else cls_end
             )
-            if ms_end - ms_start > self._max:
-                spans.extend(self._split_fn(m))
+            if ms_end - ms_start > self.__max:
+                spans.extend(self.__split_fn(m))
             else:
                 spans.append((ms_start, ms_end))
         return spans
 
-    def _split_fn(self, node: ast.stmt) -> List[Span]:
+    def __split_fn(self, node: ast.stmt) -> List[Span]:
         body: List[ast.stmt] = getattr(
             node, "body", [],
         )
         if not body:
-            return [(self._offset_start(node), self._offset_end(node))]
+            return [(self.__offset_start(node), self.__offset_end(node))]
         spans: List[Span] = []
-        fs: int = self._offset_start(node)
-        bs: int = self._offset_start(body[0])
+        fs: int = self.__offset_start(node)
+        bs: int = self.__offset_start(body[0])
         if bs > fs:
             spans.append((fs, bs))
-        gs: int = self._offset_start(body[0])
-        ge: int = self._offset_end(body[0])
+        gs: int = self.__offset_start(body[0])
+        ge: int = self.__offset_end(body[0])
         for st in body[1:]:
-            se: int = self._offset_end(st)
-            if se - gs <= self._max:
+            se: int = self.__offset_end(st)
+            if se - gs <= self.__max:
                 ge = se
             else:
                 spans.append((gs, ge))
-                gs = self._offset_start(st)
+                gs = self.__offset_start(st)
                 ge = se
-        spans.append((gs, max(ge, self._offset_end(node))))
+        spans.append((gs, max(ge, self.__offset_end(node))))
         return spans
 
 
@@ -130,19 +138,19 @@ class PythonChunker(BaseChunker):
         try:
             tree: ast.Module = ast.parse(content)
         except SyntaxError:
-            spans: List[Span] = self._split_paragraphs(
+            spans: List[Span] = self.split_paragraphs(
                 content, 0, len(content),
             )
-            return self._emit(file_path, content, spans)
+            return self.emit(file_path, content, spans)
         ext: AstSpanExtractor = AstSpanExtractor(
-            lmap, self._max_chunk_size,
+            lmap, self.max_chunk_size,
         )
-        filled: List[Span] = self._fill_gaps(
+        filled: List[Span] = self.__fill_gaps(
             ext.extract(tree), len(content),
         )
-        return self._emit(file_path, content, filled)
+        return self.emit(file_path, content, filled)
 
-    def _fill_gaps(
+    def __fill_gaps(
         self, spans: List[Span], total: int,
     ) -> List[Span]:
         if not spans:

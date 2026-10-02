@@ -2,3 +2,4 @@ __pycache__/
 .venv/
 .mypy_cache/
 PROMPT.md
+chunk_test_report.txt
