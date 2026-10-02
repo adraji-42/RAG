@@ -26,22 +26,31 @@ class Indexer:
         self._max_chunk_size: int = max_chunk_size
         self._raw_dir: str = raw_dir
         self._processed_dir: str = processed_dir
-        self._chunkers: Dict[str, BaseChunker] = (
-            self._build_chunkers()
-        )
-        self._chunks: List[MinimalSource] = []
-
-    def _build_chunkers(self) -> Dict[str, BaseChunker]:
-        return {
-            ext: cls(self._max_chunk_size)
+        self._chunkers: Dict[str, BaseChunker] = {
+            ext: cls(max_chunk_size)
             for ext, cls in _EXT_MAP.items()
         }
+        self._chunks: List[MinimalSource] = []
 
     def run(self) -> List[MinimalSource]:
         os.makedirs(self._processed_dir, exist_ok=True)
         files: List[str] = self._discover_files()
         self._chunks = self._chunk_files(files)
-        self._report(len(files))
+        invalid: int = sum(
+            1 for c in self._chunks
+            if not 0 < (
+                c.last_character_index
+                - c.first_character_index
+            ) <= self._max_chunk_size
+        )
+        status: str = (
+            "PASS (all chunks valid)"
+            if invalid == 0
+            else f"FAIL ({invalid} invalid chunks)"
+        )
+        print(f"Files scanned: {len(files)}")
+        print(f"Chunks generated: {len(self._chunks)}")
+        print(f"Sanity: {status}")
         return self._chunks
 
     def _discover_files(self) -> List[str]:
@@ -50,42 +59,35 @@ class Indexer:
             dirs.sort()
             for name in sorted(names):
                 if Path(name).suffix in self._chunkers:
-                    found.append(self._relative(root, name))
+                    found.append(
+                        os.path.normpath(
+                            os.path.join(root, name),
+                        ),
+                    )
         return found
 
-    def _relative(self, root: str, name: str) -> str:
-        return os.path.relpath(
-            os.path.join(root, name),
-            self._raw_dir,
-        )
-
     def _chunk_files(
-        self,
-        files: List[str],
+        self, files: List[str],
     ) -> List[MinimalSource]:
         chunks: List[MinimalSource] = []
-        for rel_path in tqdm(
-            files,
-            desc="Chunking",
-            unit="file",
+        for file_path in tqdm(
+            files, desc="Chunking", unit="file",
         ):
-            chunks.extend(self._chunk_one(rel_path))
+            content: str = self._read_file(file_path)
+            if not content:
+                continue
+            chunker: BaseChunker = self._chunkers[
+                Path(file_path).suffix
+            ]
+            chunks.extend(
+                chunker.chunk(file_path, content),
+            )
         return chunks
 
-    def _chunk_one(self, rel_path: str) -> List[MinimalSource]:
-        content: str = self._read_file(rel_path)
-        if not content:
-            return []
-        chunker: BaseChunker = self._chunkers[
-            Path(rel_path).suffix
-        ]
-        return chunker.chunk(rel_path, content)
-
-    def _read_file(self, rel_path: str) -> str:
-        full_path: str = os.path.join(self._raw_dir, rel_path)
+    def _read_file(self, file_path: str) -> str:
         try:
             with open(
-                full_path,
+                file_path,
                 "r",
                 encoding="utf-8",
                 errors="replace",
@@ -94,27 +96,3 @@ class Indexer:
                 return handle.read()
         except OSError:
             return ""
-
-    def _is_valid(self, chunk: MinimalSource) -> bool:
-        size: int = (
-            chunk.last_character_index
-            - chunk.first_character_index
-        )
-        return 0 < size <= self._max_chunk_size
-
-    def _count_invalid(self) -> int:
-        return sum(
-            1 for chunk in self._chunks
-            if not self._is_valid(chunk)
-        )
-
-    def _report(self, total_files: int) -> None:
-        invalid: int = self._count_invalid()
-        status: str = (
-            "PASS (all chunks valid)"
-            if invalid == 0
-            else f"FAIL ({invalid} invalid chunks)"
-        )
-        print(f"Files scanned: {total_files}")
-        print(f"Chunks generated: {len(self._chunks)}")
-        print(f"Sanity: {status}")

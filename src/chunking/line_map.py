@@ -21,7 +21,3 @@ class LineMap:
         if line_idx < len(self._offsets):
             return self._offsets[line_idx]
         return self._total
-
-    @property
-    def total(self) -> int:
-        return self._total
