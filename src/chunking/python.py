@@ -21,35 +21,31 @@ class AstSpanExtractor:
         for node in ast.iter_child_nodes(tree):
             if not isinstance(node, ast.stmt):
                 continue
-            gs, ge = self._visit(
-                node, spans, gs, ge,
-            )
+            if isinstance(node, (
+                ast.ClassDef, ast.FunctionDef,
+                ast.AsyncFunctionDef,
+            )):
+                if gs >= 0:
+                    spans.append((gs, ge))
+                spans.extend(self._compound(node))
+                gs, ge = -1, -1
+            else:
+                ns: int = self._offset_start(node)
+                ne: int = self._offset_end(node)
+                if gs < 0:
+                    gs, ge = ns, ne
+                else:
+                    ge = ne
         if gs >= 0:
             spans.append((gs, ge))
         return spans
 
-    def _visit(
-        self, node: ast.stmt, spans: List[Span],
-        gs: int, ge: int,
-    ) -> Span:
-        if isinstance(node, (
-            ast.ClassDef, ast.FunctionDef,
-            ast.AsyncFunctionDef,
-        )):
-            if gs >= 0:
-                spans.append((gs, ge))
-            spans.extend(self._compound(node))
-            return -1, -1
-        ns: int = self._s(node)
-        ne: int = self._e(node)
-        return (ns, ne) if gs < 0 else (gs, ne)
-
-    def _s(self, node: ast.stmt) -> int:
+    def _offset_start(self, node: ast.stmt) -> int:
         return self._lmap.offset(
             node.lineno, node.col_offset,
         )
 
-    def _e(self, node: ast.stmt) -> int:
+    def _offset_end(self, node: ast.stmt) -> int:
         assert node.end_lineno is not None
         assert node.end_col_offset is not None
         return self._lmap.offset(
@@ -57,12 +53,11 @@ class AstSpanExtractor:
         )
 
     def _compound(self, node: ast.stmt) -> List[Span]:
-        s: int = self._s(node)
-        e: int = self._e(node)
-        if isinstance(node, ast.ClassDef):
-            if e - s > self._max:
-                return self._split_cls(node)
-        elif e - s > self._max:
+        s: int = self._offset_start(node)
+        e: int = self._offset_end(node)
+        if isinstance(node, ast.ClassDef) and e - s > self._max:
+            return self._split_cls(node)
+        if not isinstance(node, ast.ClassDef) and e - s > self._max:
             return self._split_fn(node)
         return [(s, e)]
 
@@ -77,37 +72,23 @@ class AstSpanExtractor:
             ))
         ]
         if not ms:
-            return [(self._s(node), self._e(node))]
-        return self._cls_parts(node, ms)
-
-    def _cls_parts(
-        self, node: ast.ClassDef,
-        ms: List[ast.stmt],
-    ) -> List[Span]:
+            return [(self._offset_start(node), self._offset_end(node))]
         spans: List[Span] = []
-        cs: int = self._s(node)
-        fm: int = self._s(ms[0])
+        cs: int = self._offset_start(node)
+        fm: int = self._offset_start(ms[0])
         if fm > cs:
             spans.append((cs, fm))
-        spans.extend(
-            self._meth_spans(ms, self._e(node)),
-        )
-        return spans
-
-    def _meth_spans(
-        self, ms: List[ast.stmt], cls_end: int,
-    ) -> List[Span]:
-        spans: List[Span] = []
+        cls_end: int = self._offset_end(node)
         for i, m in enumerate(ms):
-            s: int = self._s(m)
-            e: int = (
-                self._s(ms[i + 1])
+            ms_start: int = self._offset_start(m)
+            ms_end: int = (
+                self._offset_start(ms[i + 1])
                 if i + 1 < len(ms) else cls_end
             )
-            if e - s > self._max:
+            if ms_end - ms_start > self._max:
                 spans.extend(self._split_fn(m))
             else:
-                spans.append((s, e))
+                spans.append((ms_start, ms_end))
         return spans
 
     def _split_fn(self, node: ast.stmt) -> List[Span]:
@@ -115,37 +96,23 @@ class AstSpanExtractor:
             node, "body", [],
         )
         if not body:
-            return [(self._s(node), self._e(node))]
-        return self._fn_body(node, body)
-
-    def _fn_body(
-        self, node: ast.stmt,
-        body: List[ast.stmt],
-    ) -> List[Span]:
+            return [(self._offset_start(node), self._offset_end(node))]
         spans: List[Span] = []
-        fs: int = self._s(node)
-        bs: int = self._s(body[0])
+        fs: int = self._offset_start(node)
+        bs: int = self._offset_start(body[0])
         if bs > fs:
             spans.append((fs, bs))
-        spans.extend(
-            self._greedy(body, self._e(node)),
-        )
-        return spans
-
-    def _greedy(
-        self, stmts: List[ast.stmt], end: int,
-    ) -> List[Span]:
-        spans: List[Span] = []
-        gs: int = self._s(stmts[0])
-        ge: int = self._e(stmts[0])
-        for st in stmts[1:]:
-            se: int = self._e(st)
+        gs: int = self._offset_start(body[0])
+        ge: int = self._offset_end(body[0])
+        for st in body[1:]:
+            se: int = self._offset_end(st)
             if se - gs <= self._max:
                 ge = se
             else:
                 spans.append((gs, ge))
-                gs, ge = self._s(st), se
-        spans.append((gs, max(ge, end)))
+                gs = self._offset_start(st)
+                ge = se
+        spans.append((gs, max(ge, self._offset_end(node))))
         return spans
 
 
@@ -163,34 +130,19 @@ class PythonChunker(BaseChunker):
         try:
             tree: ast.Module = ast.parse(content)
         except SyntaxError:
-            return self._fallback(file_path, content)
-        return self._from_ast(
-            file_path, content, lmap, tree,
-        )
-
-    def _from_ast(
-        self, fp: str, content: str,
-        lmap: LineMap, tree: ast.Module,
-    ) -> List[MinimalSource]:
+            spans: List[Span] = self._split_paragraphs(
+                content, 0, len(content),
+            )
+            return self._emit(file_path, content, spans)
         ext: AstSpanExtractor = AstSpanExtractor(
             lmap, self._max_chunk_size,
         )
-        filled: List[Span] = self._fill(
+        filled: List[Span] = self._fill_gaps(
             ext.extract(tree), len(content),
         )
-        return self._packer.emit(fp, content, filled)
+        return self._emit(file_path, content, filled)
 
-    def _fallback(
-        self, fp: str, content: str,
-    ) -> List[MinimalSource]:
-        spans: List[Span] = (
-            self._packer.split_paragraphs(
-                content, 0, len(content),
-            )
-        )
-        return self._packer.emit(fp, content, spans)
-
-    def _fill(
+    def _fill_gaps(
         self, spans: List[Span], total: int,
     ) -> List[Span]:
         if not spans:
@@ -198,17 +150,12 @@ class PythonChunker(BaseChunker):
         filled: List[Span] = []
         if spans[0][0] > 0:
             filled.append((0, spans[0][0]))
-        filled.extend(self._inter(spans))
-        if spans[-1][1] < total:
-            filled.append((spans[-1][1], total))
-        return filled
-
-    def _inter(self, spans: List[Span]) -> List[Span]:
-        filled: List[Span] = []
         prev: int = spans[0][0]
         for s, e in spans:
             if s > prev:
                 filled.append((prev, s))
             filled.append((s, e))
             prev = e
+        if spans[-1][1] < total:
+            filled.append((spans[-1][1], total))
         return filled
