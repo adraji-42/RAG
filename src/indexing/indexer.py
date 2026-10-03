@@ -1,18 +1,19 @@
 import os
+from tqdm import tqdm
 from pathlib import Path
 from typing import Dict, List, Type
 
-from tqdm import tqdm
-
 from ..chunking.base import BaseChunker
-from ..chunking.markdown import MarkdownChunker
+from ..chunking.text import TextChunker
 from ..chunking.python import PythonChunker
+from ..chunking.markdown import MarkdownChunker
 from ..models import MinimalSource
+
 
 _EXT_MAP: Dict[str, Type[BaseChunker]] = {
     ".py": PythonChunker,
     ".md": MarkdownChunker,
-    ".txt": MarkdownChunker,
+    ".txt": TextChunker,
 }
 
 
