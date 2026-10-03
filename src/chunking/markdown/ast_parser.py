@@ -1,18 +1,12 @@
-from typing import Dict, List, Tuple
-
 from markdown_it.token import Token
+from typing import List, Tuple, Optional
 
 from ..base import Span
 from ..line_map import LineMap
 
-BLOCK_OPENERS: Dict[str, str] = {
-    "table_open": "table_close",
-    "bullet_list_open": "bullet_list_close",
-    "ordered_list_open": "ordered_list_close",
-    "blockquote_open": "blockquote_close",
-}
+CODE_TYPES: Tuple[str, ...] = ("fence", "code_block")
 
-FENCE_TYPES: Tuple[str, ...] = ("fence", "code_block")
+TABLE_TYPE: str = "table_open"
 
 HEADING_TYPE: str = "heading_open"
 
@@ -38,46 +32,29 @@ class MarkdownAstParser:
     def extract_blocks(
         self, tokens: List[Token],
     ) -> List[Tuple[str, Span]]:
-        result: List[Tuple[str, Span]] = []
-        i: int = 0
-        while i < len(tokens):
-            tok: Token = tokens[i]
-            if tok.type in FENCE_TYPES and tok.map:
-                s: int = self.__lmap.line_start(tok.map[0])
-                e: int = self.__lmap.line_start(tok.map[1])
-                result.append(("code", (s, e)))
-            elif tok.type in BLOCK_OPENERS and tok.map:
-                closer: str = BLOCK_OPENERS[tok.type]
-                bs: int = self.__lmap.line_start(tok.map[0])
-                be: int = self._find_close(tokens, i, closer)
-                result.append(("block", (bs, be)))
-            i += 1
-        return result
+        found: List[Tuple[str, Span]] = []
+        for tok in tokens:
+            bounds: Optional[List[int]] = tok.map
+            if not bounds:
+                continue
+            start: int = self.__lmap.line_start(bounds[0])
+            end: int = self.__lmap.line_start(bounds[1])
+            if tok.type in CODE_TYPES:
+                found.append(("code", (start, end)))
+            elif tok.type == TABLE_TYPE:
+                found.append(("table", (start, end)))
+        return self._sanitize(found)
 
-    def _find_close(
-        self, tokens: List[Token],
-        start_idx: int, closer: str,
-    ) -> int:
-        depth: int = 1
-        opener: str = tokens[start_idx].type
-        for j in range(start_idx + 1, len(tokens)):
-            if tokens[j].type == opener:
-                depth += 1
-            elif tokens[j].type == closer:
-                depth -= 1
-                cmap: List[int] | None = tokens[j].map
-                if depth == 0 and cmap:
-                    return self.__lmap.line_start(cmap[1])
-                if depth == 0:
-                    return self._fallback_close(
-                        tokens, start_idx,
-                    )
-        return self._fallback_close(tokens, start_idx)
-
-    def _fallback_close(
-        self, tokens: List[Token], start_idx: int,
-    ) -> int:
-        m: object = tokens[start_idx].map
-        if m and isinstance(m, list) and len(m) >= 2:
-            return self.__lmap.line_start(m[1])
-        return self.__lmap.total
+    def _sanitize(
+        self, blocks: List[Tuple[str, Span]],
+    ) -> List[Tuple[str, Span]]:
+        ordered: List[Tuple[str, Span]] = sorted(
+            blocks, key=lambda item: item[1][0],
+        )
+        clean: List[Tuple[str, Span]] = []
+        pos: int = 0
+        for kind, (s, e) in ordered:
+            if s >= pos and s < e:
+                clean.append((kind, (s, e)))
+                pos = e
+        return clean

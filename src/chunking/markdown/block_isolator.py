@@ -36,16 +36,18 @@ class BlockIsolator:
         spans: List[Span] = []
         pos: int = start
         for _, (bs, be) in relevant:
+            if bs < pos:
+                continue
             if bs > pos:
                 spans.extend(self.__text.split_block(
                     content, pos, bs,
                 ))
-            if be - bs > self.__max:
+            if be - bs <= self.__max:
+                spans.append((bs, be))
+            else:
                 spans.extend(self.__text.split_lines(
                     content, bs, be,
                 ))
-            else:
-                spans.append((bs, be))
             pos = be
         if pos < end:
             spans.extend(self.__text.split_block(
