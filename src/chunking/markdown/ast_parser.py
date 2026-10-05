@@ -1,5 +1,5 @@
 from markdown_it.token import Token
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 from ..base import Span
 from ..line_map import LineMap
@@ -34,18 +34,17 @@ class MarkdownAstParser:
     ) -> List[Tuple[str, Span]]:
         found: List[Tuple[str, Span]] = []
         for tok in tokens:
-            bounds: Optional[List[int]] = tok.map
-            if not bounds:
+            if not tok.map:
                 continue
-            start: int = self.__lmap.line_start(bounds[0])
-            end: int = self.__lmap.line_start(bounds[1])
+            start: int = self.__lmap.line_start(tok.map[0])
+            end: int = self.__lmap.line_start(tok.map[1])
             if tok.type in CODE_TYPES:
                 found.append(("code", (start, end)))
             elif tok.type == TABLE_TYPE:
                 found.append(("table", (start, end)))
-        return self._sanitize(found)
+        return self.__sanitize(found)
 
-    def _sanitize(
+    def __sanitize(
         self, blocks: List[Tuple[str, Span]],
     ) -> List[Tuple[str, Span]]:
         ordered: List[Tuple[str, Span]] = sorted(
@@ -54,7 +53,7 @@ class MarkdownAstParser:
         clean: List[Tuple[str, Span]] = []
         pos: int = 0
         for kind, (s, e) in ordered:
-            if s >= pos and s < e:
+            if s >= pos:
                 clean.append((kind, (s, e)))
                 pos = e
         return clean

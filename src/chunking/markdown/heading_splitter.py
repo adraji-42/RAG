@@ -21,11 +21,11 @@ class HeadingSplitter:
     ) -> List[Span]:
         if end - start <= self.__max:
             return [(start, end)]
-        pts: List[int] = self._heading_pts(
+        pts: List[int] = self.__heading_pts(
             heads, start, end, plvl,
         )
         if pts:
-            return self._split_at(
+            return self.__split_at(
                 content, start, end, pts,
                 plvl, heads, blocks,
             )
@@ -33,7 +33,7 @@ class HeadingSplitter:
             content, start, end, blocks,
         )
 
-    def _heading_pts(
+    def __heading_pts(
         self, heads: List[Tuple[int, int]],
         start: int, end: int, plvl: int,
     ) -> List[int]:
@@ -48,7 +48,7 @@ class HeadingSplitter:
             off for lv, off in cands if lv == best
         )
 
-    def _split_at(
+    def __split_at(
         self, content: str,
         start: int, end: int, pts: List[int],
         plvl: int,

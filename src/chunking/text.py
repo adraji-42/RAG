@@ -25,7 +25,7 @@ class TextChunker(BaseChunker):
         spans: List[Span] = self.split_paragraphs(
             content, start, end,
         )
-        if self._all_fit(spans):
+        if self.__all_fit(spans):
             return spans
         refined: List[Span] = []
         for s, e in spans:
@@ -50,7 +50,7 @@ class TextChunker(BaseChunker):
             pos = line_end
         return spans
 
-    def _all_fit(self, spans: List[Span]) -> bool:
+    def __all_fit(self, spans: List[Span]) -> bool:
         return all(
             e - s <= self.max_chunk_size
             for s, e in spans
