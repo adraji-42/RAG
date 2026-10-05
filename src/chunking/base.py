@@ -1,5 +1,7 @@
-from abc import ABC, abstractmethod
+import re
+
 from typing import List, Tuple
+from abc import ABC, abstractmethod
 
 from ..models import MinimalSource
 
@@ -26,18 +28,22 @@ class BaseChunker(ABC):
     def split_paragraphs(
         self, text: str, start: int, end: int,
     ) -> List[Span]:
-        parts: List[str] = text[start:end].split("\n\n")
-        if len(parts) <= 1:
+        slice_text = text[start:end]
+        matches = list(re.finditer(r"\n\s*\n", slice_text))
+        if not matches:
             return [(start, end)]
+
+        pos = start
         spans: List[Span] = []
-        pos: int = start
-        for part in parts:
-            se: int = min(pos + len(part), end)
-            if se < end:
-                se += 2
-            spans.append((pos, min(se, end)))
-            pos = min(se, end)
+        for m in matches:
+            span_end = start + m.end()
+            spans.append((pos, min(span_end, end)))
+            pos = span_end
+        if pos < end:
+            spans.append((pos, end))
+
         return spans
+
 
     def emit(
         self, fp: str, content: str, spans: List[Span],
@@ -92,7 +98,12 @@ class BaseChunker(ABC):
             else:
                 limit: int = pos + self.__max_chunk_size
                 nl: int = content.rfind("\n", pos, limit)
-                cut = nl + 1 if nl > pos else min(limit, end)
+                sp: int = content.rfind(" ", pos, limit)
+                cut: int = (
+                    nl + 1 if nl > pos
+                    else sp + 1 if sp > pos
+                    else min(limit, end)
+                )
             chunks.append(MinimalSource(
                 file_path=fp,
                 first_character_index=pos,

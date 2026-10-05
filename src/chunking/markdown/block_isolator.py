@@ -25,11 +25,11 @@ class BlockIsolator:
             return self.__text.split_block(
                 content, start, end,
             )
-        return self._dispatch(
+        return self.__dispatch(
             content, start, end, relevant,
         )
 
-    def _dispatch(
+    def __dispatch(
         self, content: str, start: int, end: int,
         relevant: List[Tuple[str, Span]],
     ) -> List[Span]:
