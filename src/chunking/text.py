@@ -12,9 +12,7 @@ class TextChunker(BaseChunker):
     def chunk(
         self, file_path: str, content: str,
     ) -> List[MinimalSource]:
-        spans: List[Span] = self.split_block(
-            content, 0, len(content),
-        )
+        spans: List[Span] = self.split_block(content, 0, len(content))
         return self.emit(file_path, content, spans)
 
     def split_block(

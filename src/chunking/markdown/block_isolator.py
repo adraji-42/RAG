@@ -38,7 +38,7 @@ class BlockIsolator:
         for _, (bs, be) in relevant:
             if bs < pos:
                 continue
-            if bs > pos:
+            elif bs > pos:
                 spans.extend(self.__text.split_block(
                     content, pos, bs,
                 ))

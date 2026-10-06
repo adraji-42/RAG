@@ -55,7 +55,7 @@ class BaseChunker(ABC):
                 result.append(MinimalSource(
                     file_path=fp,
                     first_character_index=s,
-                    last_character_index=e,
+                    last_character_index=e
                 ))
             else:
                 result.extend(
