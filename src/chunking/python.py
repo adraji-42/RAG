@@ -134,20 +134,16 @@ class PythonChunker(BaseChunker):
     def chunk(
         self, file_path: str, content: str,
     ) -> List[MinimalSource]:
-        lmap: LineMap = LineMap(content)
         try:
             tree: ast.Module = ast.parse(content)
         except SyntaxError:
-            spans: List[Span] = self.split_paragraphs(
-                content, 0, len(content),
-            )
+            spans: List[Span] = self.split_paragraphs(content, 0, len(content))
             return self.emit(file_path, content, spans)
-        ext: AstSpanExtractor = AstSpanExtractor(
-            lmap, self.max_chunk_size,
-        )
-        filled: List[Span] = self.__fill_gaps(
-            ext.extract(tree), len(content),
-        )
+
+        lmap: LineMap = LineMap(content)
+        ext: AstSpanExtractor = AstSpanExtractor(lmap, self.max_chunk_size)
+        filled: List[Span] = self.__fill_gaps(ext.extract(tree), len(content))
+
         return self.emit(file_path, content, filled)
 
     def __fill_gaps(

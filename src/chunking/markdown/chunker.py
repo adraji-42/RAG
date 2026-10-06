@@ -32,6 +32,6 @@ class MarkdownChunker(BaseChunker):
         heads: List[Tuple[int, int]] = parser.extract_headings(tokens)
         blocks: List[Tuple[str, Span]] = parser.extract_blocks(tokens)
         spans: List[Span] = self.__splitter.split(
-            content, 0, len(content), 0, heads, blocks,
+            content, 0, len(content), 0, heads, blocks
         )
         return self.emit(file_path, content, spans)

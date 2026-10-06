@@ -21,17 +21,10 @@ class HeadingSplitter:
     ) -> List[Span]:
         if end - start <= self.__max:
             return [(start, end)]
-        pts: List[int] = self.__heading_pts(
-            heads, start, end, plvl,
-        )
+        pts: List[int] = self.__heading_pts(heads, start, end, plvl)
         if pts:
-            return self.__split_at(
-                content, start, end, pts,
-                plvl, heads, blocks,
-            )
-        return self.__isolator.isolate(
-            content, start, end, blocks,
-        )
+            return self.__split_at(content, start, end, pts, heads, blocks)
+        return self.__isolator.isolate(content, start, end, blocks)
 
     def __heading_pts(
         self, heads: List[Tuple[int, int]],
@@ -44,20 +37,13 @@ class HeadingSplitter:
         if not cands:
             return []
         best: int = min(lv for lv, _ in cands)
-        return sorted(
-            off for lv, off in cands if lv == best
-        )
+        return sorted(off for lv, off in cands if lv == best)
 
     def __split_at(
-        self, content: str,
-        start: int, end: int, pts: List[int],
-        plvl: int,
-        heads: List[Tuple[int, int]],
-        blocks: List[Tuple[str, Span]],
+        self, content: str, start: int, end: int, pts: List[int],
+        heads: List[Tuple[int, int]], blocks: List[Tuple[str, Span]]
     ) -> List[Span]:
-        best: int = min(
-            lv for lv, off in heads if off in pts
-        )
+        best: int = min(lv for lv, off in heads if off in pts)
         spans: List[Span] = []
         prev: int = start
         for p in pts:
