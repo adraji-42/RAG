@@ -25,17 +25,15 @@ class PythonChunker(BaseChunker):
 
         lmap: LineMap = LineMap(content)
         fn_splitter: FunctionSplitter = FunctionSplitter(
-            lmap, self.max_chunk_size,
+            lmap, self.max_chunk_size
         )
         cls_splitter: ClassSplitter = ClassSplitter(
-            lmap, fn_splitter, self.max_chunk_size,
+            lmap, fn_splitter, self.max_chunk_size
         )
         ext: AstSpanExtractor = AstSpanExtractor(
-            lmap, cls_splitter, fn_splitter, self.max_chunk_size,
+            lmap, cls_splitter, fn_splitter, self.max_chunk_size
         )
-        filled: List[Span] = self.__fill_gaps(
-            ext.extract(tree), len(content),
-        )
+        filled: List[Span] = self.__fill_gaps(ext.extract(tree), len(content))
 
         return self.emit(file_path, content, filled)
 
