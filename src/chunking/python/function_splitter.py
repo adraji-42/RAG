@@ -11,27 +11,47 @@ class FunctionSplitter:
         self.__lmap: LineMap = lmap
         self.__max: int = max_size
 
-    def split(self, node: ast.stmt) -> List[Span]:
+    def split(self, node: ast.stmt, begin: int = -1) -> List[Span]:
         body: List[ast.stmt] = getattr(node, "body", [])
+        fs: int = begin if begin >= 0 else self.__start(node)
+        end: int = self.__end(node)
         if not body:
-            return [(self.__start(node), self.__end(node))]
+            return [(fs, end)]
+
+        cs: int = fs
+        ce: int = -1
+        prev: int = fs
         spans: List[Span] = []
-        fs: int = self.__start(node)
-        bs: int = self.__start(body[0])
-        if bs > fs:
-            spans.append((fs, bs))
-        gs: int = self.__start(body[0])
-        ge: int = self.__end(body[0])
-        for st in body[1:]:
+
+        for st in body:
             se: int = self.__end(st)
-            if se - gs <= self.__max:
-                ge = se
+            if cs < 0:
+                cs = self.__resume(prev, st)
+            if ce >= 0 and se - cs > self.__max:
+                spans.append((cs, ce))
+                cs = self.__resume(prev, st)
+                ce = -1
+            if se - cs > self.__max:
+                spans.extend(self.__oversized(st, cs))
+                cs = -1
             else:
-                spans.append((gs, ge))
-                gs = self.__start(st)
-                ge = se
-        spans.append((gs, max(ge, self.__end(node))))
+                ce = se
+            prev = se
+        if ce >= 0:
+            spans.append((cs, end))
         return spans
+
+    def __oversized(self, node: ast.stmt, begin: int) -> List[Span]:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return self.split(node, begin)
+        if isinstance(node, ast.ClassDef):
+            from .class_splitter import ClassSplitter
+            return ClassSplitter(self.__lmap, self, self.__max).split(node, begin)
+        return [(begin, self.__end(node))]
+
+    def __resume(self, prev_end: int, node: ast.stmt) -> int:
+        line: int = self.__lmap.line_at(prev_end) + 1
+        return min(self.__lmap.line_start(line), self.__start(node))
 
     def __start(self, node: ast.stmt) -> int:
         return self.__lmap.offset(node.lineno, node.col_offset)

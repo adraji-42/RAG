@@ -6,6 +6,8 @@ from ..line_map import LineMap
 from .class_splitter import ClassSplitter
 from .function_splitter import FunctionSplitter
 
+_COMPOUND = (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+
 
 class AstSpanExtractor:
 
@@ -25,24 +27,20 @@ class AstSpanExtractor:
         gs: int = -1
         ge: int = -1
         spans: List[Span] = []
-        for node in ast.iter_child_nodes(tree):
-            if not isinstance(node, ast.stmt):
-                continue
-            if isinstance(node, (
-                ast.ClassDef, ast.FunctionDef,
-                ast.AsyncFunctionDef,
-            )):
+        for node in tree.body:
+            if isinstance(node, _COMPOUND):
                 if gs >= 0:
                     spans.append((gs, ge))
+                    gs = -1
                 spans.extend(self.__compound(node))
-                gs, ge = -1, -1
-            else:
-                ns: int = self.__start(node)
-                ne: int = self.__end(node)
-                if gs < 0:
-                    gs, ge = ns, ne
-                else:
-                    ge = ne
+                continue
+            ne: int = self.__end(node)
+            if gs >= 0 and ne - gs > self.__max:
+                spans.append((gs, ge))
+                gs = -1
+            if gs < 0:
+                gs = self.__start(node)
+            ge = ne
         if gs >= 0:
             spans.append((gs, ge))
         return spans
@@ -50,11 +48,11 @@ class AstSpanExtractor:
     def __compound(self, node: ast.stmt) -> List[Span]:
         s: int = self.__start(node)
         e: int = self.__end(node)
-        if isinstance(node, ast.ClassDef) and e - s > self.__max:
+        if e - s <= self.__max:
+            return [(s, e)]
+        if isinstance(node, ast.ClassDef):
             return self.__cls_splitter.split(node)
-        if not isinstance(node, ast.ClassDef) and e - s > self.__max:
-            return self.__fn_splitter.split(node)
-        return [(s, e)]
+        return self.__fn_splitter.split(node)
 
     def __start(self, node: ast.stmt) -> int:
         return self.__lmap.offset(node.lineno, node.col_offset)
