@@ -3,6 +3,7 @@ from typing import List
 
 from ..base import BaseChunker, Span
 from ..line_map import LineMap
+from ..text import TextChunker
 from ...models import MinimalSource
 from .ast_extractor import AstSpanExtractor
 from .class_splitter import ClassSplitter
@@ -20,8 +21,8 @@ class PythonChunker(BaseChunker):
         try:
             tree: ast.Module = ast.parse(content)
         except SyntaxError:
-            spans: List[Span] = self.split_paragraphs(content, 0, len(content))
-            return self.emit(file_path, content, spans)
+            chunker: TextChunker = TextChunker(self.max_chunk_size)
+            return chunker.chunk(file_path, content)
 
         lmap: LineMap = LineMap(content)
         fn_splitter: FunctionSplitter = FunctionSplitter(
