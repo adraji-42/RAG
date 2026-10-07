@@ -22,9 +22,9 @@ class AstSpanExtractor:
         self.__max: int = max_size
 
     def extract(self, tree: ast.Module) -> List[Span]:
-        spans: List[Span] = []
         gs: int = -1
         ge: int = -1
+        spans: List[Span] = []
         for node in ast.iter_child_nodes(tree):
             if not isinstance(node, ast.stmt):
                 continue
