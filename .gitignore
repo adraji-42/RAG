@@ -3,3 +3,4 @@ __pycache__/
 .mypy_cache/
 PROMPT.md
 chunk_test_report.txt
+data/processed/
