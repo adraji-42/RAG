@@ -23,4 +23,5 @@ Retrieval-Augmented Generation (RAG) is an NLP framework that combines the stren
 [RAG](https://www.geeksforgeeks.org/nlp/what-is-retrieval-augmented-generation-rag/)
 [Chunking](https://medium.com/@dev_tips/25-chunking-tricks-for-rag-that-devs-actually-use-12bebd0375bc)
 [Incremental Indexing](https://medium.com/@vasanthank29/incremental-indexing-strategies-for-large-rag-systems-e3e5a9e2ced7)
+[BM25](https://www.geeksforgeeks.org/nlp/what-is-bm25-best-matching-25-algorithm/)
 [Fire Python](https://www.geeksforgeeks.org/python/python-fire-module/)
