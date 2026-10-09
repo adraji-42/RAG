@@ -46,7 +46,9 @@ class FunctionSplitter:
             return self.split(node, begin)
         if isinstance(node, ast.ClassDef):
             from .class_splitter import ClassSplitter
-            return ClassSplitter(self.__lmap, self, self.__max).split(node, begin)
+            return ClassSplitter(
+                self.__lmap, self, self.__max
+            ).split(node, begin)
         return [(begin, self.__end(node))]
 
     def __resume(self, prev_end: int, node: ast.stmt) -> int:

@@ -1,5 +1,5 @@
-from bisect import bisect_right
 from typing import List
+from bisect import bisect_right
 
 
 class LineMap:

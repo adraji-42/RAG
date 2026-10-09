@@ -1,5 +1,7 @@
+from typing import List
+
 from .chunker import MarkdownChunker
 
-__all__: list[str] = [
+__all__: List[str] = [
     "MarkdownChunker",
 ]

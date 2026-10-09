@@ -1,7 +1,7 @@
 from typing import List
 
-from ..base import BaseChunker, Span
 from ...models import MinimalSource
+from ..base import BaseChunker, Span
 from .splitter import RecursiveTextSplitter
 
 
