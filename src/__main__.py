@@ -1,4 +1,5 @@
 import sys
+
 import fire
 
 from .cli import Cli
