@@ -1,12 +1,12 @@
 import ast
 from typing import List
 
-from ..base import BaseChunker, Span
 from ..line_map import LineMap
 from ..text import TextChunker
 from ...models import MinimalSource
-from .ast_extractor import AstSpanExtractor
+from ..base import BaseChunker, Span
 from .class_splitter import ClassSplitter
+from .ast_extractor import AstSpanExtractor
 from .function_splitter import FunctionSplitter
 
 

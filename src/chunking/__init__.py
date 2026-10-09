@@ -1,9 +1,11 @@
-from .line_map import LineMap
-from .markdown import MarkdownChunker
-from .python import PythonChunker
-from .text import TextChunker
+from typing import List
 
-__all__: list[str] = [
+from .line_map import LineMap
+from .text import TextChunker
+from .python import PythonChunker
+from .markdown import MarkdownChunker
+
+__all__: List[str] = [
     "LineMap",
     "MarkdownChunker",
     "PythonChunker",

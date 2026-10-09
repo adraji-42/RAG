@@ -1,5 +1,7 @@
+from typing import List
+
 from .chunker import TextChunker
 
-__all__: list[str] = [
+__all__: List[str] = [
     "TextChunker",
 ]

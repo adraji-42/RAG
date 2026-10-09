@@ -1,5 +1,6 @@
-from markdown_it.token import Token
 from typing import List, Tuple
+
+from markdown_it.token import Token
 
 from ..base import Span
 from ..line_map import LineMap

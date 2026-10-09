@@ -1,9 +1,10 @@
 from typing import List, Tuple
+
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
 
-from ..text import TextChunker
 from ..line_map import LineMap
+from ..text import TextChunker
 from ...models import MinimalSource
 from ..base import BaseChunker, Span
 from .ast_parser import MarkdownAstParser
