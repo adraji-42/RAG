@@ -54,5 +54,5 @@ class Indexer:
         self.__storage.save_chunks(chunks)
         self.__manifest.save(self.__storage.manifest_path)
         (bm25 := BM25Index()).fit([c["text"] for c in chunks])
-        bm25.save(self.__storage.bm25_path)
+        self.__storage.save_bm25(bm25)
         return chunks

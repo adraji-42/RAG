@@ -2,6 +2,7 @@ import os
 import pickle
 from typing import List, cast
 
+from .bm25 import BM25Index
 from .types import ChunkRecord
 
 
@@ -30,3 +31,11 @@ class IndexStorage:
     def load_chunks(self) -> List[ChunkRecord]:
         with open(self.chunks_path, "rb") as f:
             return cast(List[ChunkRecord], pickle.load(f))
+
+    def save_bm25(self, index: BM25Index) -> None:
+        with open(self.bm25_path, "wb") as f:
+            pickle.dump(index, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def load_bm25(self) -> BM25Index:
+        with open(self.bm25_path, "rb") as f:
+            return cast(BM25Index, pickle.load(f))
