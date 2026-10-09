@@ -1,7 +1,7 @@
 import os
 import math
 import pickle
-from typing import Self
+from typing import Dict, List, Self
 
 from .tokenizer import BM25Tokenizer
 
@@ -13,11 +13,11 @@ class BM25Index:
         self.b: float = b
         self.corpus_size: int = 0
         self.avg_doc_len: float = 0.0
-        self.doc_lengths: list[int] = []
-        self.idf: dict[str, float] = {}
-        self.inverted_index: dict[str, dict[int, int]] = {}
+        self.doc_lengths: List[int] = []
+        self.idf: Dict[str, float] = {}
+        self.inverted_index: Dict[str, Dict[int, int]] = {}
 
-    def fit(self, corpus: list[str]) -> None:
+    def fit(self, corpus: List[str]) -> None:
         self.corpus_size = len(corpus)
         if self.corpus_size == 0:
             self.avg_doc_len = 0.0
@@ -31,12 +31,12 @@ class BM25Index:
         total_tokens: int = 0
 
         for doc_idx, doc in enumerate(corpus):
-            tokens: list[str] = BM25Tokenizer.tokenize(doc)
+            tokens: List[str] = BM25Tokenizer.tokenize(doc)
             doc_len: int = len(tokens)
             self.doc_lengths.append(doc_len)
             total_tokens += doc_len
 
-            counts: dict[str, int] = {}
+            counts: Dict[str, int] = {}
             for token in tokens:
                 counts[token] = counts.get(token, 0) + 1
 
@@ -55,14 +55,14 @@ class BM25Index:
                 1.0 + (n_docs - n_q + 0.5) / (n_q + 0.5)
             )
 
-    def get_scores(self, query: str) -> list[float]:
-        query_tokens: list[str] = BM25Tokenizer.tokenize(query)
-        scores: list[float] = [0.0] * self.corpus_size
+    def get_scores(self, query: str) -> List[float]:
+        query_tokens: List[str] = BM25Tokenizer.tokenize(query)
+        scores: List[float] = [0.0] * self.corpus_size
         for token in query_tokens:
             if token not in self.inverted_index:
                 continue
             idf_val: float = self.idf[token]
-            postings: dict[int, int] = self.inverted_index[token]
+            postings: Dict[int, int] = self.inverted_index[token]
             for doc_idx, freq in postings.items():
                 len_norm: float = (
                     self.doc_lengths[doc_idx] / self.avg_doc_len
@@ -78,7 +78,7 @@ class BM25Index:
                     ) / denom
         return scores
 
-    def scores(self, query: str) -> list[float]:
+    def scores(self, query: str) -> List[float]:
         return self.get_scores(query)
 
     def save(self, file_path: str) -> None:
