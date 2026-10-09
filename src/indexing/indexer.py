@@ -35,13 +35,15 @@ class Indexer:
 
     def run(self) -> List[ChunkRecord]:
         chunks: List[ChunkRecord] = []
-        for fp in tqdm(self.__reader.discover_files(), desc="Chunking"):
+        for fp in tqdm(
+            self.__reader.discover_files(), desc="Chunking", unit="file"
+        ):
             c: str = self.__reader.read_file(fp)
-            fc: List[ChunkRecord] = [
-                {"source": s, "text": c[s.first_character_index:
-                                        s.last_character_index]}
-                for s in self.__chunkers[Path(fp).suffix].chunk(fp, c)
-            ] if c else []
+            fc: List[ChunkRecord] = [{
+                "source": s,
+                "text": c[s.first_character_index:s.last_character_index]
+            }
+            for s in self.__chunkers[Path(fp).suffix].chunk(fp, c)]if c else []
             chunks.extend(fc)
             self.__manifest.record(fp, c, len(fc))
         inv: int = sum(

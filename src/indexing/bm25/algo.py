@@ -9,31 +9,31 @@ from .tokenizer import BM25Tokenizer
 class BM25Index:
 
     def __init__(self, k1: float = 1.5, b: float = 0.75) -> None:
-        self.k1: float = k1
-        self.b: float = b
-        self.corpus_size: int = 0
-        self.avg_doc_len: float = 0.0
-        self.doc_lengths: List[int] = []
-        self.idf: Dict[str, float] = {}
-        self.inverted_index: Dict[str, Dict[int, int]] = {}
+        self.__k1: float = k1
+        self.__b: float = b
+        self.__corpus_size: int = 0
+        self.__avg_doc_len: float = 0.0
+        self.__doc_lengths: List[int] = []
+        self.__idf: Dict[str, float] = {}
+        self.__inverted_index: Dict[str, Dict[int, int]] = {}
 
     def fit(self, corpus: List[str]) -> None:
-        self.corpus_size = len(corpus)
-        if self.corpus_size == 0:
-            self.avg_doc_len = 0.0
-            self.doc_lengths = []
-            self.idf = {}
-            self.inverted_index = {}
+        self.__corpus_size = len(corpus)
+        if self.__corpus_size == 0:
+            self.__avg_doc_len = 0.0
+            self.__doc_lengths = []
+            self.__idf = {}
+            self.__inverted_index = {}
             return
 
-        self.doc_lengths = []
-        self.inverted_index = {}
+        self.__doc_lengths: List[int] = []
+        self.__inverted_index: Dict[str, Dict[int, int]] = {}
         total_tokens: int = 0
 
         for doc_idx, doc in enumerate(corpus):
             tokens: List[str] = BM25Tokenizer.tokenize(doc)
             doc_len: int = len(tokens)
-            self.doc_lengths.append(doc_len)
+            self.__doc_lengths.append(doc_len)
             total_tokens += doc_len
 
             counts: Dict[str, int] = {}
@@ -41,40 +41,40 @@ class BM25Index:
                 counts[token] = counts.get(token, 0) + 1
 
             for token, freq in counts.items():
-                if token not in self.inverted_index:
-                    self.inverted_index[token] = {}
-                self.inverted_index[token][doc_idx] = freq
+                if token not in self.__inverted_index:
+                    self.__inverted_index[token] = {}
+                self.__inverted_index[token][doc_idx] = freq
 
-        self.avg_doc_len = total_tokens / self.corpus_size
+        self.__avg_doc_len: float = total_tokens / self.__corpus_size
 
-        self.idf = {}
-        n_docs: float = float(self.corpus_size)
-        for term, postings in self.inverted_index.items():
+        self.__idf: Dict[str, float] = {}
+        n_docs: float = float(self.__corpus_size)
+        for term, postings in self.__inverted_index.items():
             n_q: float = float(len(postings))
-            self.idf[term] = math.log(
+            self.__idf[term] = math.log(
                 1.0 + (n_docs - n_q + 0.5) / (n_q + 0.5)
             )
 
     def get_scores(self, query: str) -> List[float]:
         query_tokens: List[str] = BM25Tokenizer.tokenize(query)
-        scores: List[float] = [0.0] * self.corpus_size
+        scores: List[float] = [0.0] * self.__corpus_size
         for token in query_tokens:
-            if token not in self.inverted_index:
+            if token not in self.__inverted_index:
                 continue
-            idf_val: float = self.idf[token]
-            postings: Dict[int, int] = self.inverted_index[token]
+            idf_val: float = self.__idf[token]
+            postings: Dict[int, int] = self.__inverted_index[token]
             for doc_idx, freq in postings.items():
                 len_norm: float = (
-                    self.doc_lengths[doc_idx] / self.avg_doc_len
-                    if self.avg_doc_len > 0.0
+                    self.__doc_lengths[doc_idx] / self.__avg_doc_len
+                    if self.__avg_doc_len > 0.0
                     else 0.0
                 )
-                denom: float = freq + self.k1 * (
-                    1.0 - self.b + self.b * len_norm
+                denom: float = freq + self.__k1 * (
+                    1.0 - self.__b + self.__b * len_norm
                 )
                 if denom > 0.0:
                     scores[doc_idx] += idf_val * (
-                        freq * (self.k1 + 1.0)
+                        freq * (self.__k1 + 1.0)
                     ) / denom
         return scores
 
