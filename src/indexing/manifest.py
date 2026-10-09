@@ -1,13 +1,9 @@
 import os
 import pickle
 import hashlib
-from typing import Dict, TypedDict
+from typing import Dict
 
-
-class ManifestRecord(TypedDict):
-    hash: str
-    mtime: float
-    chunk_count: int
+from .types import ManifestRecord
 
 
 class ManifestBuilder:
