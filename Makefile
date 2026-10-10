@@ -9,12 +9,12 @@ debug:
 	@uv run python3 -m pdb -m src
 
 lint:
-	@flake8 .
-	@mypy . --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
+	@flake8 . --exclude $(VENV_PATH),data/
+	@mypy . --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs --exclude '($(VENV_PATH)|data)'
 
 lint-strict:
-	@flake8 .
-	@mypy . --strict
+	@flake8 . --exclude $(VENV_PATH),data/
+	@mypy . --strict --exclude '($(VENV_PATH)|data)'
 
 clean:
 	@find . -name "__pycache__" -type d | xargs rm -rf

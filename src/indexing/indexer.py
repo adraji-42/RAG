@@ -30,7 +30,6 @@ class Indexer:
         )
         self.__storage.save_chunks(chunks)
         self.__storage.save_manifest(self.__manifest.manifest)
-        bm25: BM25Index = BM25Index()
-        bm25.fit([c["text"] for c in chunks])
+        bm25: BM25Index = BM25Index([c["text"] for c in chunks])
         self.__storage.save_bm25(bm25)
         return chunks
