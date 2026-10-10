@@ -1,9 +1,9 @@
 import os
 import pickle
-from typing import List, cast
+from typing import Dict, List, cast
 
 from .bm25 import BM25Index
-from .types import ChunkRecord
+from .types import ChunkRecord, ManifestRecord
 
 
 class IndexStorage:
@@ -31,6 +31,18 @@ class IndexStorage:
     def load_chunks(self) -> List[ChunkRecord]:
         with open(self.chunks_path, "rb") as f:
             return cast(List[ChunkRecord], pickle.load(f))
+
+    def save_manifest(
+        self, manifest: Dict[str, ManifestRecord]
+    ) -> None:
+        with open(self.manifest_path, "wb") as f:
+            pickle.dump(manifest, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def load_manifest(self) -> Dict[str, ManifestRecord]:
+        with open(self.manifest_path, "rb") as f:
+            return cast(
+                Dict[str, ManifestRecord], pickle.load(f)
+            )
 
     def save_bm25(self, index: BM25Index) -> None:
         with open(self.bm25_path, "wb") as f:

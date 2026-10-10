@@ -1,5 +1,4 @@
 import os
-import pickle
 import hashlib
 from typing import Dict
 
@@ -31,12 +30,3 @@ class ManifestBuilder:
             "mtime": mtime,
             "chunk_count": chunk_count,
         }
-
-    def save(self, file_path: str) -> None:
-        parent: str = os.path.dirname(file_path)
-        if parent:
-            os.makedirs(parent, exist_ok=True)
-        with open(file_path, "wb") as f:
-            pickle.dump(
-                self.__manifest, f, protocol=pickle.HIGHEST_PROTOCOL,
-            )
