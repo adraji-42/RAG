@@ -1,45 +1,76 @@
-from typing import Dict, List
+import math
+import heapq
+from typing import Dict, List, Tuple
+from collections import Counter, defaultdict
 
-from .postings import InvertedIndex
-from .scorer import BM25Scorer
-from .stats import CorpusStats
 from .tokenizer import BM25Tokenizer
 
 
 class BM25Index:
 
     def __init__(self, k1: float = 1.5, b: float = 0.75) -> None:
-        self.__stats: CorpusStats = CorpusStats()
-        self.__postings: InvertedIndex = InvertedIndex()
-        self.__scorer: BM25Scorer = BM25Scorer(k1, b)
+        self.__k1: float = k1
+        self.__b: float = b
+        self.__corpus_size: int = 0
+        self.__avg_doc_len: float = 0.0
+        self.__doc_lengths: List[int] = []
         self.__idf: Dict[str, float] = {}
+        self.__inverted_index: Dict[str, Dict[int, int]] = defaultdict(dict)
+
+    @property
+    def corpus_size(self) -> int:
+        return self.__corpus_size
+
+    @property
+    def avg_doc_len(self) -> float:
+        return self.__avg_doc_len
 
     def fit(self, corpus: List[str]) -> None:
-        for idx, doc in enumerate(corpus):
+        self.__corpus_size = len(corpus)
+        self.__doc_lengths = []
+        self.__inverted_index = defaultdict(dict)
+        for doc_idx, doc in enumerate(corpus):
             tokens: List[str] = BM25Tokenizer.tokenize(doc)
-            self.__stats.add_doc(len(tokens))
-            counts: Dict[str, int] = {}
-            for t in tokens:
-                counts[t] = counts.get(t, 0) + 1
-            for t, freq in counts.items():
-                self.__postings.add_term(t, idx, freq)
-        self.__stats.finalize()
-        c_size: int = self.__stats.corpus_size
+            self.__doc_lengths.append(len(tokens))
+            counts: Counter[str] = Counter(tokens)
+            for term, freq in counts.items():
+                self.__inverted_index[term][doc_idx] = freq
+        self.__avg_doc_len = (
+            sum(self.__doc_lengths) / self.__corpus_size
+            if self.__corpus_size > 0
+            else 0.0
+        )
+        n: float = float(self.__corpus_size)
         self.__idf = {
-            t: self.__scorer.compute_idf(self.__postings.doc_freq(t), c_size)
-            for t in self.__postings.terms
+            term: math.log(
+                1.0 + (n - len(postings) + 0.5) / (len(postings) + 0.5)
+            )
+            for term, postings in self.__inverted_index.items()
         }
 
     def get_scores(self, query: str) -> List[float]:
-        scores: List[float] = [0.0] * self.__stats.corpus_size
-        doc_lens: List[int] = self.__stats.doc_lengths
-        avg_len: float = self.__stats.avg_doc_len
-        for t in BM25Tokenizer.tokenize(query):
-            if t not in self.__idf:
+        scores: List[float] = [0.0] * self.__corpus_size
+        b_factor: float = (
+            (self.__k1 * self.__b) / self.__avg_doc_len
+            if self.__avg_doc_len > 0.0
+            else 0.0
+        )
+        k1_base: float = self.__k1 * (1.0 - self.__b)
+        for token in set(BM25Tokenizer.tokenize(query)):
+            if token not in self.__idf:
                 continue
-            idf: float = self.__idf[t]
-            for idx, freq in self.__postings.get_postings(t).items():
-                scores[idx] += self.__scorer.score_term(
-                    freq, doc_lens[idx], avg_len, idf
+            idf: float = self.__idf[token]
+            for doc_idx, freq in self.__inverted_index[token].items():
+                num: float = idf * (freq * (self.__k1 + 1.0))
+                denom: float = (
+                    freq + k1_base + b_factor * self.__doc_lengths[doc_idx]
                 )
+                scores[doc_idx] += num / denom
         return scores
+
+    def search(
+        self, query: str, k: int = 5
+    ) -> List[Tuple[int, float]]:
+        return heapq.nlargest(
+            k, enumerate(self.get_scores(query)), key=lambda x: x[1]
+        )
