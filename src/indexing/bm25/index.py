@@ -27,7 +27,7 @@ class BM25Index:
         n: float = float(len(self.__doc_lengths))
         self.__idf: Dict[str, float] = {
             term: math.log(
-                (n - len(postings) + 0.5) / (len(postings) + 0.5)
+                1.0 + (n - len(postings) + 0.5) / (len(postings) + 0.5)
             )
             for term, postings in self.__inverted_index.items()
         }
