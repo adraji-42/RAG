@@ -69,7 +69,7 @@ class Cli:
         retriever: BM25Retriever = BM25Retriever(processed_dir)
         search_results: List[MinimalSearchResults] = []
 
-        for item in tqdm(raw_questions, desc="Searching"):
+        for item in tqdm(raw_questions, desc="Searching", unit="query"):
             if not isinstance(item, dict):
                 continue
             qid: str = str(item.get("question_id", ""))

@@ -3,7 +3,7 @@ import heapq
 from typing import Dict, List, Tuple
 from collections import Counter, defaultdict
 
-from .tokenizer import BM25Tokenizer
+from .tokenizer import Tokenizer
 
 
 class BM25Index:
@@ -14,7 +14,7 @@ class BM25Index:
         self.__doc_lengths: List[int] = []
         self.__inverted_index: Dict[str, Dict[int, int]] = defaultdict(dict)
         for doc_idx, doc in enumerate(corpus):
-            tokens: List[str] = BM25Tokenizer.tokenize(doc)
+            tokens: List[str] = Tokenizer.tokenize(doc)
             self.__doc_lengths.append(len(tokens))
             counts: Counter[str] = Counter(tokens)
             for term, freq in counts.items():
@@ -47,7 +47,7 @@ class BM25Index:
 
     def get_scores(self, query: str) -> List[float]:
         scores: List[float] = [0.0] * len(self.__doc_lengths)
-        for token in set(BM25Tokenizer.tokenize(query)):
+        for token in set(Tokenizer.tokenize(query)):
             if token not in self.__idf:
                 continue
             idf: float = self.__idf[token]

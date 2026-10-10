@@ -1,6 +1,8 @@
 from typing import List
 
 from .index import BM25Index
-from .tokenizer import BM25Tokenizer
+from .tokenizer import Tokenizer
 
-__all__: List[str] = ["BM25Index", "BM25Tokenizer"]
+BM25Tokenizer = Tokenizer
+
+__all__: List[str] = ["BM25Index", "Tokenizer", "BM25Tokenizer"]

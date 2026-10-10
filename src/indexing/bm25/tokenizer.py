@@ -9,7 +9,7 @@ _NUM_TRANS2_RE: Pattern[str] = re.compile(r"([0-9]+)([a-zA-Z]{2,})")
 _SPLIT_RE: Pattern[str] = re.compile(r"[-_ .:/]+")
 
 
-class BM25Tokenizer:
+class Tokenizer:
 
     @staticmethod
     def tokenize(text: str) -> List[str]:

@@ -1,12 +1,13 @@
 from typing import List, Tuple
 
+from .base import BaseRetriever
 from ..indexing.bm25 import BM25Index
 from ..indexing.storage import IndexStorage
 from ..indexing.types import ChunkRecord
 from ..models import MinimalSource
 
 
-class BM25Retriever:
+class BM25Retriever(BaseRetriever):
 
     def __init__(self, processed_dir: str = "data/processed") -> None:
         self.__storage: IndexStorage = IndexStorage(processed_dir)
@@ -24,9 +25,9 @@ class BM25Retriever:
     def retrieve(self, query: str, k: int = 5) -> List[MinimalSource]:
         if k <= 0 or not query.strip() or not self.__chunks:
             return []
-        results: List[Tuple[int, float]] = self.__bm25.search(query, k=k)
+        ranked: List[Tuple[int, float]] = self.__bm25.search(query, k=k)
         return [
             self.__chunks[idx]["source"]
-            for idx, _ in results
+            for idx, _ in ranked
             if 0 <= idx < len(self.__chunks)
         ]
