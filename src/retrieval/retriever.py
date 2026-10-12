@@ -15,11 +15,11 @@ class BM25Retriever(BaseRetriever):
             self.__chunks: List[ChunkRecord] = (
                 self.__storage.load_chunks()
             )
-        except (FileNotFoundError, OSError, EOFError):
+        except (OSError, EOFError):
             self.__chunks = []
         try:
             self.__bm25: BM25Index = self.__storage.load_bm25()
-        except (FileNotFoundError, OSError, EOFError):
+        except (OSError, EOFError):
             self.__bm25 = BM25Index([])
 
     def retrieve(self, query: str, k: int = 5) -> List[MinimalSource]:

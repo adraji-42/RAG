@@ -8,7 +8,6 @@ from .types import ChunkRecord
 
 
 class Indexer:
-    _EXT = ChunkingPipeline._EXT
 
     def __init__(
         self,
@@ -32,3 +31,7 @@ class Indexer:
         self.__storage.save_manifest(self.__manifest.manifest)
         bm25: BM25Index = BM25Index([c["text"] for c in chunks])
         self.__storage.save_bm25(bm25)
+        print(
+            f"Ingestion complete! Indexed {len(chunks)} "
+            f"chunks under {self.__storage.processed_dir}"
+        )

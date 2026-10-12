@@ -65,6 +65,11 @@ class BM25Index:
     def search(
         self, query: str, k: int = 5
     ) -> List[Tuple[int, float]]:
-        return heapq.nlargest(
-            k, enumerate(self.get_scores(query)), key=lambda x: x[1]
-        )
+        if k <= 0:
+            return []
+        candidates: List[Tuple[int, float]] = [
+            (idx, s)
+            for idx, s in enumerate(self.get_scores(query))
+            if s > 0.0
+        ]
+        return heapq.nlargest(k, candidates, key=lambda x: x[1])

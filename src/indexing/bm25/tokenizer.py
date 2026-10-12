@@ -16,6 +16,10 @@ class Tokenizer:
         result: List[str] = []
 
         for raw in _TOKEN_RE.findall(text):
+            if raw.islower() and raw.isalpha():
+                if len(raw) >= 2:
+                    result.append(raw)
+                continue
             s: str = _NUM_TRANS2_RE.sub(
                 r"\1 \2", _NUM_TRANS1_RE.sub(
                     r"\1 \2", _TRANS2_RE.sub(
