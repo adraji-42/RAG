@@ -1,12 +1,19 @@
-import json
 import os
 from pathlib import Path
-from typing import Any, List
+from typing import Dict, List
 
 from tqdm import tqdm
+from pydantic import ValidationError
 
+from .evaluation import Evaluator
 from .indexing import Indexer
-from .models import MinimalSearchResults, MinimalSource, StudentSearchResults
+from .models import (
+    AnsweredQuestion,
+    MinimalSearchResults,
+    MinimalSource,
+    RagDataset,
+    StudentSearchResults,
+)
 from .retrieval import BM25Retriever
 
 
@@ -29,7 +36,7 @@ class Cli:
         self,
         query: str,
         k: int = 5,
-        processed_dir: str = "data/processed",
+        processed_dir: str = "data/processed"
     ) -> None:
         retriever: BM25Retriever = BM25Retriever(processed_dir)
         sources: List[MinimalSource] = retriever.retrieve(query, k)
@@ -46,39 +53,28 @@ class Cli:
         save_directory: str = "data/output/search_results",
         processed_dir: str = "data/processed",
     ) -> None:
-        if not os.path.isfile(dataset_path):
-            print(f"Dataset file not found: {dataset_path}")
-            return
-
         try:
             with open(dataset_path, "r", encoding="utf-8") as f:
-                data: Any = json.load(f)
-        except (json.JSONDecodeError, OSError):
+                dataset: RagDataset = RagDataset.model_validate_json(
+                    f.read()
+                )
+        except (ValidationError, OSError):
             print(f"Failed to read dataset file: {dataset_path}")
-            return
-
-        if not isinstance(data, dict):
-            print(f"Invalid dataset format in: {dataset_path}")
-            return
-
-        raw_questions: Any = data.get("rag_questions", [])
-        if not isinstance(raw_questions, list):
-            print(f"Invalid rag_questions format in: {dataset_path}")
             return
 
         retriever: BM25Retriever = BM25Retriever(processed_dir)
         search_results: List[MinimalSearchResults] = []
 
-        for item in tqdm(raw_questions, desc="Searching", unit="query"):
-            if not isinstance(item, dict):
-                continue
-            qid: str = str(item.get("question_id", ""))
-            qtext: str = str(item.get("question", ""))
-            sources: List[MinimalSource] = retriever.retrieve(qtext, k=k)
+        for item in tqdm(
+            dataset.rag_questions, desc="Searching", unit="query"
+        ):
+            sources: List[MinimalSource] = retriever.retrieve(
+                item.question, k=k
+            )
             search_results.append(
                 MinimalSearchResults(
-                    question_id=qid,
-                    question=qtext,
+                    question_id=item.question_id,
+                    question=item.question,
                     retrieved_sources=sources,
                 )
             )
@@ -93,6 +89,55 @@ class Cli:
             save_directory, Path(dataset_path).name
         )
         with open(out_path, "w", encoding="utf-8") as f:
-            json.dump(student_results.model_dump(), f, indent=2)
+            f.write(student_results.model_dump_json(indent=2))
 
         print(f"Saved student_search_results to {out_path}")
+
+    def evaluate(
+        self, student_search_results_path: str, dataset_path: str
+    ) -> None:
+        if not os.path.isfile(student_search_results_path):
+            print(f"File not found: {student_search_results_path}")
+            return
+        if not os.path.isfile(dataset_path):
+            print(f"File not found: {dataset_path}")
+            return
+
+        try:
+            with open(student_search_results_path, "r", encoding="utf-8") as f:
+                student_results: StudentSearchResults = (
+                    StudentSearchResults.model_validate_json(f.read())
+                )
+        except (ValidationError, OSError):
+            print(
+                f"Invalid student search results file: "
+                f"{student_search_results_path}"
+            )
+            return
+
+        try:
+            with open(dataset_path, "r", encoding="utf-8") as f:
+                dataset: RagDataset = RagDataset.model_validate_json(
+                    f.read()
+                )
+        except (ValidationError, OSError):
+            print(f"Invalid dataset file: {dataset_path}")
+            return
+
+        evaluator: Evaluator = Evaluator()
+        scores: Dict[int, float] = evaluator.evaluate_recall_at_k(
+            student_results, dataset, k_values=[1, 3, 5, 10]
+        )
+        count: int = sum(
+            1
+            for q in dataset.rag_questions
+            if isinstance(q, AnsweredQuestion) and q.sources
+        )
+
+        print("Student data is valid: True")
+        print("Evaluation Results")
+        print("=" * 40)
+        print(f"Questions evaluated: {count}")
+        for k in [1, 3, 5, 10]:
+            score: float = scores.get(k, 0.0)
+            print(f"Recall@{k}: {score:.3f} ({score * 100:.1f}%)")

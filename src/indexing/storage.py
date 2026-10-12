@@ -13,6 +13,10 @@ class IndexStorage:
         os.makedirs(self.__processed_dir, exist_ok=True)
 
     @property
+    def processed_dir(self) -> str:
+        return self.__processed_dir
+
+    @property
     def chunks_path(self) -> str:
         return os.path.join(self.__processed_dir, "chunks.pkl")
 
