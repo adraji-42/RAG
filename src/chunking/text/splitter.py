@@ -29,17 +29,6 @@ class RecursiveTextSplitter:
                         spans.extend(self.split_lines(content, ss, se))
         return spans
 
-    def split_lines(
-        self, content: str, start: int, end: int,
-    ) -> List[Span]:
-        pos: int = start
-        spans: List[Span] = []
-        for line in content[start:end].split("\n"):
-            line_end: int = min(pos + len(line) + 1, end)
-            spans.append((pos, line_end))
-            pos = line_end
-        return spans
-
     def __split_paragraphs(
         self, text: str, start: int, end: int,
     ) -> List[Span]:
@@ -68,4 +57,15 @@ class RecursiveTextSplitter:
                 pos = m.end()
         if pos < end:
             spans.append((pos, end))
+        return spans
+
+    def split_lines(
+        self, content: str, start: int, end: int,
+    ) -> List[Span]:
+        pos: int = start
+        spans: List[Span] = []
+        for line in content[start:end].split("\n"):
+            line_end: int = min(pos + len(line) + 1, end)
+            spans.append((pos, line_end))
+            pos = line_end
         return spans

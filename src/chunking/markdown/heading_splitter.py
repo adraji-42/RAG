@@ -43,9 +43,9 @@ class HeadingSplitter:
         self, content: str, start: int, end: int, pts: List[int],
         heads: List[Tuple[int, int]], blocks: List[Tuple[str, Span]]
     ) -> List[Span]:
-        best: int = min(lv for lv, off in heads if off in pts)
-        spans: List[Span] = []
         prev: int = start
+        spans: List[Span] = []
+        best: int = min(lv for lv, off in heads if off in pts)
         for p in pts:
             if p > prev:
                 spans.extend(self.split(

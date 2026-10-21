@@ -48,9 +48,7 @@ class ChunkingPipeline:
         records: List[ChunkRecord] = [
             {
                 "source": s,
-                "text": content[
-                    s.first_character_index:s.last_character_index
-                ],
+                "text": content[s.first_character_index:s.last_character_index]
             }
             for s in chunker.chunk(fp, content)
         ]
