@@ -1,4 +1,8 @@
+from typing import List
+
+from .types import ChunkRecord
 from .storage import IndexStorage
+from .manifest import ManifestBuilder
 from .pipeline import ChunkingPipeline
 from .incremental import IncrementalIndexer
 
@@ -21,4 +25,13 @@ class Indexer:
         )
 
     def run(self, force: bool = False) -> None:
-        self.__incremental.run(force=force)
+        if not force and self.__storage.has_index():
+            self.__incremental.run()
+            return
+        manifest: ManifestBuilder = ManifestBuilder()
+        chunks: List[ChunkRecord] = self.__pipeline.chunk_corpus(manifest)
+        self.__storage.save_artifacts(chunks, manifest.manifest)
+        print(
+            f"Ingestion complete! Indexed {len(chunks)} "
+            f"chunks under {self.__storage.processed_dir}"
+        )
