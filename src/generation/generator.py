@@ -23,7 +23,7 @@ class AnswerGenerator:
             dtype=torch.bfloat16,
             low_cpu_mem_usage=True,
         )
-        self.__model.eval()
+        cast(torch.nn.Module, self.__model).eval()
 
     def __apply_template(self, messages: List[Dict[str, str]]) -> str:
         try:
