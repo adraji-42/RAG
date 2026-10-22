@@ -3,9 +3,9 @@ from typing import Dict, List, Type
 
 from tqdm import tqdm
 
-from .manifest import ManifestBuilder
-from .reader import CorpusReader
 from .types import ChunkRecord
+from .reader import CorpusReader
+from .manifest import ManifestBuilder
 from ..chunking.base import BaseChunker
 from ..chunking import MarkdownChunker, PythonChunker, TextChunker
 
@@ -26,18 +26,24 @@ class ChunkingPipeline:
             k: v(max_chunk_size) for k, v in self._EXT.items()
         }
 
+    def discover_files(self) -> List[str]:
+        return self.__reader.discover_files()
+
+    def read_file(self, fp: str) -> str:
+        return self.__reader.read_file(fp)
+
     def chunk_corpus(
         self, manifest: ManifestBuilder
     ) -> List[ChunkRecord]:
         chunks: List[ChunkRecord] = []
         for fp in tqdm(
-            self.__reader.discover_files(), desc="Chunking", unit="file"
+            self.discover_files(), desc="Chunking", unit="file"
         ):
-            chunks.extend(self.__chunk_file(fp, manifest))
-        self.__audit(chunks)
+            chunks.extend(self.chunk_file(fp, manifest))
+        self.audit(chunks)
         return chunks
 
-    def __chunk_file(
+    def chunk_file(
         self, fp: str, manifest: ManifestBuilder
     ) -> List[ChunkRecord]:
         content: str = self.__reader.read_file(fp)
@@ -55,7 +61,7 @@ class ChunkingPipeline:
         manifest.record(fp, content, len(records))
         return records
 
-    def __audit(self, chunks: List[ChunkRecord]) -> None:
+    def audit(self, chunks: List[ChunkRecord]) -> None:
         invalid: int = sum(
             not 0
             < c["source"].last_character_index
