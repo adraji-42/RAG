@@ -7,7 +7,6 @@ from .types import ChunkRecord, ManifestRecord
 
 
 class IndexStorage:
-
     def __init__(self, processed_dir: str) -> None:
         self.__processed_dir: str = processed_dir
         os.makedirs(self.__processed_dir, exist_ok=True)
@@ -27,6 +26,13 @@ class IndexStorage:
     @property
     def bm25_path(self) -> str:
         return os.path.join(self.__processed_dir, "bm25.pkl")
+
+    def has_index(self) -> bool:
+        return (
+            os.path.isfile(self.chunks_path)
+            and os.path.isfile(self.manifest_path)
+            and os.path.isfile(self.bm25_path)
+        )
 
     def save_chunks(self, chunks: List[ChunkRecord]) -> None:
         with open(self.chunks_path, "wb") as f:
@@ -55,3 +61,10 @@ class IndexStorage:
     def load_bm25(self) -> BM25Index:
         with open(self.bm25_path, "rb") as f:
             return cast(BM25Index, pickle.load(f))
+
+    def save_artifacts(
+        self, chunks: List[ChunkRecord], manifest: Dict[str, ManifestRecord]
+    ) -> None:
+        self.save_chunks(chunks)
+        self.save_manifest(manifest)
+        self.save_bm25(BM25Index([c["text"] for c in chunks]))
