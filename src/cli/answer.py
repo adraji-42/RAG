@@ -41,7 +41,7 @@ class AnswerCommand(BaseCommand):
 
 class AnswerDatasetCommand(BaseCommand):
 
-    def _generate_answers(
+    def __generate_answers(
         self, results: StudentSearchResults
     ) -> List[MinimalAnswer]:
         generator: AnswerGenerator = AnswerGenerator()
@@ -72,7 +72,7 @@ class AnswerDatasetCommand(BaseCommand):
         )
         if student_results is None:
             return
-        answers: List[MinimalAnswer] = self._generate_answers(
+        answers: List[MinimalAnswer] = self.__generate_answers(
             student_results
         )
         result: StudentSearchResultsAndAnswer = (
