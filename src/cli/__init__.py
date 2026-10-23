@@ -18,8 +18,9 @@ class Cli:
         query: str,
         k: int = 5,
         processed_dir: str = "data/processed",
+        mode: str = "bm25",
     ) -> None:
-        SearchCommand().cmd(query, k, processed_dir)
+        SearchCommand().cmd(query, k, processed_dir, mode)
 
     def search_dataset(
         self,
@@ -27,9 +28,10 @@ class Cli:
         k: int = 5,
         save_directory: str = "data/output/search_results",
         processed_dir: str = "data/processed",
+        mode: str = "bm25",
     ) -> None:
         SearchDatasetCommand().cmd(
-            dataset_path, k, save_directory, processed_dir
+            dataset_path, k, save_directory, processed_dir, mode
         )
 
     def evaluate(
@@ -42,20 +44,22 @@ class Cli:
         query: str,
         k: int = 5,
         processed_dir: str = "data/processed",
+        mode: str = "bm25",
     ) -> None:
         from .answer import AnswerCommand
 
-        AnswerCommand().cmd(query, k, processed_dir)
+        AnswerCommand().cmd(query, k, processed_dir, mode)
 
     def answer_dataset(
         self,
         student_search_results_path: str,
         save_directory: str = "data/output/search_results_and_answer",
+        mode: str = "bm25",
     ) -> None:
         from .answer import AnswerDatasetCommand
 
         AnswerDatasetCommand().cmd(
-            student_search_results_path, save_directory
+            student_search_results_path, save_directory, mode
         )
 
 
