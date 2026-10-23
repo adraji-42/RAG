@@ -6,8 +6,8 @@ from tqdm import tqdm
 
 from .io import CliIO
 from .base import BaseCommand
-from ..retrieval import BM25Retriever
 from ..generation import AnswerGenerator
+from ..retrieval import BaseRetriever, BM25Retriever, HybridRetriever
 from ..models import (
     MinimalAnswer,
     MinimalSource,
@@ -17,17 +17,21 @@ from ..models import (
 
 
 class AnswerCommand(BaseCommand):
-
     def cmd(
         self,
         query: str,
         k: int = 5,
         processed_dir: str = "data/processed",
+        mode: str = "bm25",
     ) -> None:
         if not query.strip() or k <= 0:
             print("Invalid query or k value.", file=sys.stderr)
             return
-        retriever: BM25Retriever = BM25Retriever(processed_dir)
+        retriever: BaseRetriever = (
+            HybridRetriever(processed_dir)
+            if mode == "hybrid"
+            else BM25Retriever(processed_dir)
+        )
         sources: List[MinimalSource] = retriever.retrieve(query, k=k)
         for s in sources:
             span: str = (
@@ -40,7 +44,6 @@ class AnswerCommand(BaseCommand):
 
 
 class AnswerDatasetCommand(BaseCommand):
-
     def __generate_answers(
         self, results: StudentSearchResults
     ) -> List[MinimalAnswer]:
@@ -65,7 +68,7 @@ class AnswerDatasetCommand(BaseCommand):
     def cmd(
         self,
         student_search_results_path: str,
-        save_directory: str = "data/output/search_results_and_answer",
+        save_directory: str = "data/output/search_results_and_answer"
     ) -> None:
         student_results: Optional[StudentSearchResults] = (
             CliIO.load_student_results(student_search_results_path)
