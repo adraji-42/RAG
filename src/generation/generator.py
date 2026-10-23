@@ -16,7 +16,6 @@ class AnswerGenerator:
         max_new_tokens: int = 300,
     ) -> None:
         self.__max_new_tokens: int = max_new_tokens
-        torch.set_num_threads(os.cpu_count() or 4)
         self.__tokenizer: Any = AutoTokenizer.from_pretrained(model_name)
         self.__model: Any = AutoModelForCausalLM.from_pretrained(
             model_name,
