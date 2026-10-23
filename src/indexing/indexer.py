@@ -1,10 +1,13 @@
 from typing import List
 
+import numpy as np
+
 from .types import ChunkRecord
 from .storage import IndexStorage
 from .manifest import ManifestBuilder
 from .pipeline import ChunkingPipeline
 from .incremental import IncrementalIndexer
+from .embeddings import EmbeddingModel, VectorIndex
 
 
 class Indexer:
@@ -30,7 +33,10 @@ class Indexer:
             return
         manifest: ManifestBuilder = ManifestBuilder()
         chunks: List[ChunkRecord] = self.__pipeline.chunk_corpus(manifest)
-        self.__storage.save_artifacts(chunks, manifest.manifest)
+        model: EmbeddingModel = EmbeddingModel()
+        embeddings: np.ndarray = model.encode([c["text"] for c in chunks])
+        vector_index: VectorIndex = VectorIndex(embeddings)
+        self.__storage.save_artifacts(chunks, manifest.manifest, vector_index)
         print(
             f"Ingestion complete! Indexed {len(chunks)} "
             f"chunks under {self.__storage.processed_dir}"
