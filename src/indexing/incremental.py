@@ -1,12 +1,14 @@
 import os
 from typing import Dict, List, Set, Tuple
 
+import numpy as np
 from tqdm import tqdm
 
 from .storage import IndexStorage
 from .manifest import ManifestBuilder
 from .pipeline import ChunkingPipeline
 from .types import ChunkRecord, ManifestRecord
+from .embeddings import EmbeddingModel, VectorIndex
 
 
 class IncrementalIndexer:
@@ -37,7 +39,10 @@ class IncrementalIndexer:
     ) -> None:
         self.__storage.save_manifest(manifest)
         if changed:
-            self.__storage.save_artifacts(chunks, manifest)
+            model: EmbeddingModel = EmbeddingModel()
+            embeddings: np.ndarray = model.encode([c["text"] for c in chunks])
+            vector_index: VectorIndex = VectorIndex(embeddings)
+            self.__storage.save_artifacts(chunks, manifest, vector_index)
 
     def run(self) -> List[ChunkRecord]:
         old_man, old_grp = self.__load_state()

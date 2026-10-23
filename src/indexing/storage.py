@@ -3,6 +3,7 @@ import pickle
 from typing import Dict, List, cast
 
 from .bm25 import BM25Index
+from .embeddings import VectorIndex
 from .types import ChunkRecord, ManifestRecord
 
 
@@ -27,11 +28,16 @@ class IndexStorage:
     def bm25_path(self) -> str:
         return os.path.join(self.__processed_dir, "bm25.pkl")
 
+    @property
+    def embeddings_path(self) -> str:
+        return os.path.join(self.__processed_dir, "embeddings.pkl")
+
     def has_index(self) -> bool:
         return (
             os.path.isfile(self.chunks_path)
             and os.path.isfile(self.manifest_path)
             and os.path.isfile(self.bm25_path)
+            and os.path.isfile(self.embeddings_path)
         )
 
     def save_chunks(self, chunks: List[ChunkRecord]) -> None:
@@ -62,9 +68,21 @@ class IndexStorage:
         with open(self.bm25_path, "rb") as f:
             return cast(BM25Index, pickle.load(f))
 
+    def save_embeddings(self, index: VectorIndex) -> None:
+        with open(self.embeddings_path, "wb") as f:
+            pickle.dump(index, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    def load_embeddings(self) -> VectorIndex:
+        with open(self.embeddings_path, "rb") as f:
+            return cast(VectorIndex, pickle.load(f))
+
     def save_artifacts(
-        self, chunks: List[ChunkRecord], manifest: Dict[str, ManifestRecord]
+        self,
+        chunks: List[ChunkRecord],
+        manifest: Dict[str, ManifestRecord],
+        vector_index: VectorIndex,
     ) -> None:
         self.save_chunks(chunks)
         self.save_manifest(manifest)
         self.save_bm25(BM25Index([c["text"] for c in chunks]))
+        self.save_embeddings(vector_index)
