@@ -1,8 +1,9 @@
 from collections import defaultdict
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
+from .cache import QueryCache
 from .base import BaseRetriever
 from ..models import MinimalSource
 from ..indexing.bm25 import BM25Index
@@ -14,19 +15,21 @@ from ..indexing.embeddings import EmbeddingModel, VectorIndex
 class HybridRetriever(BaseRetriever):
     def __init__(self, processed_dir: str = "data/processed") -> None:
         self.__storage: IndexStorage = IndexStorage(processed_dir)
-        try:
-            self.__chunks: List[ChunkRecord] = self.__storage.load_chunks()
-        except (OSError, EOFError):
-            self.__chunks = []
-        try:
-            self.__bm25: BM25Index = self.__storage.load_bm25()
-        except (OSError, EOFError):
-            self.__bm25 = BM25Index([])
-        try:
-            self.__vector: VectorIndex = self.__storage.load_embeddings()
-        except (OSError, EOFError):
-            self.__vector = VectorIndex(np.empty((0, 384), dtype=np.float32))
-        self.__model: EmbeddingModel = EmbeddingModel()
+        self.__cache: QueryCache = QueryCache(processed_dir)
+        self.__chunks: Optional[List[ChunkRecord]] = None
+        self.__bm25: Optional[BM25Index] = None
+        self.__vector: Optional[VectorIndex] = None
+        self.__model: Optional[EmbeddingModel] = None
+
+    def __ensure_loaded(self) -> None:
+        if self.__chunks is None:
+            self.__chunks = self.__storage.load_chunks()
+        if self.__bm25 is None:
+            self.__bm25 = self.__storage.load_bm25()
+        if self.__vector is None:
+            self.__vector = self.__storage.load_embeddings()
+        if self.__model is None:
+            self.__model = EmbeddingModel()
 
     def __fuse(
         self,
@@ -44,15 +47,27 @@ class HybridRetriever(BaseRetriever):
         return [idx for idx, _ in ranked]
 
     def retrieve(self, query: str, k: int = 5) -> List[MinimalSource]:
-        if k <= 0 or not query.strip() or not self.__chunks:
+        if k <= 0 or not query.strip():
             return []
-        candidates_k: int = max(k * 2, 10)
-        lexical = self.__bm25.search(query, k=candidates_k)
+        cached: Optional[List[MinimalSource]] = self.__cache.get(
+            "hybrid", query, k
+        )
+        if cached is not None:
+            return cached
+        self.__ensure_loaded()
+        if not (
+            self.__chunks and self.__bm25 and self.__vector and self.__model
+        ):
+            return []
+        cand_k: int = max(k * 2, 10)
+        lexical = self.__bm25.search(query, k=cand_k)
         query_vec: np.ndarray = self.__model.encode_query(query)
-        semantic = self.__vector.search(query_vec, k=candidates_k)
-        fused_indices: List[int] = self.__fuse(lexical, semantic, k)
-        return [
-            self.__chunks[idx]["source"]
-            for idx in fused_indices
-            if 0 <= idx < len(self.__chunks)
+        semantic = self.__vector.search(query_vec, k=cand_k)
+        fused: List[int] = self.__fuse(lexical, semantic, k)
+        sources: List[MinimalSource] = [
+            self.__chunks[i]["source"]
+            for i in fused
+            if 0 <= i < len(self.__chunks)
         ]
+        self.__cache.set("hybrid", query, k, sources)
+        return sources
