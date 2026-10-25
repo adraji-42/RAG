@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 from tqdm import tqdm
@@ -22,56 +22,102 @@ class IncrementalIndexer:
 
     def __load_state(
         self,
-    ) -> Tuple[Dict[str, ManifestRecord], Dict[str, List[ChunkRecord]]]:
+    ) -> Tuple[
+        Dict[str, ManifestRecord],
+        Dict[str, List[ChunkRecord]],
+        Dict[str, List[np.ndarray]],
+    ]:
         manifest: Dict[str, ManifestRecord] = self.__storage.load_manifest()
         chunks: List[ChunkRecord] = self.__storage.load_chunks()
-        grouped: Dict[str, List[ChunkRecord]] = {}
-        for c in chunks:
+        embs: np.ndarray = self.__storage.load_embeddings().embeddings
+        grp_c: Dict[str, List[ChunkRecord]] = {}
+        grp_e: Dict[str, List[np.ndarray]] = {}
+        has_e: bool = len(embs) == len(chunks)
+        for i, c in enumerate(chunks):
             fp: str = os.path.normpath(c["source"].file_path)
-            grouped.setdefault(fp, []).append(c)
-        return manifest, grouped
+            grp_c.setdefault(fp, []).append(c)
+            if has_e:
+                grp_e.setdefault(fp, []).append(embs[i])
+        return manifest, grp_c, grp_e
 
     def __save_state(
         self,
         chunks: List[ChunkRecord],
         manifest: Dict[str, ManifestRecord],
+        vector_index: VectorIndex,
         changed: bool,
     ) -> None:
-        self.__storage.save_manifest(manifest)
         if changed:
-            model: EmbeddingModel = EmbeddingModel()
-            embeddings: np.ndarray = model.encode([c["text"] for c in chunks])
-            vector_index: VectorIndex = VectorIndex(embeddings)
             self.__storage.save_artifacts(chunks, manifest, vector_index)
+        else:
+            self.__storage.save_manifest(manifest)
 
-    def run(self) -> List[ChunkRecord]:
-        old_man, old_grp = self.__load_state()
-        manifest_builder: ManifestBuilder = ManifestBuilder(old_man)
-        files: List[str] = self.__pipeline.discover_files()
-        counts: Dict[str, int] = {
-            "added": 0, "modified": 0, "unchanged": 0
-        }
-        chunks: List[ChunkRecord] = []
-        for fp in tqdm(files, desc="Indexing", unit="file"):
-            cached: List[ChunkRecord] = old_grp.get(os.path.normpath(fp), [])
-            status: str = manifest_builder.check_status(fp, len(cached))
-            counts[status] += 1
-            if status == "unchanged":
-                chunks.extend(cached)
-            else:
-                chunks.extend(
-                    self.__pipeline.chunk_file(fp, manifest_builder)
-                )
-        cur_files: Set[str] = {os.path.normpath(f) for f in files}
-        deleted: int = sum(1 for k in old_man if k not in cur_files)
-        changed: bool = bool(
-            counts["added"] or counts["modified"] or deleted
-        )
-        self.__pipeline.audit(chunks)
-        self.__save_state(chunks, manifest_builder.manifest, changed)
+    def __print_summary(
+        self, counts: Dict[str, int], deleted: int, total: int
+    ) -> None:
         print(
             f"Incremental stats: +{counts['added']} added, "
             f"~{counts['modified']} modified, -{deleted} deleted, "
             f"={counts['unchanged']} unchanged"
         )
+        print(
+            f"Ingestion complete! Indexed {total} "
+            f"chunks under {self.__storage.processed_dir}"
+        )
+
+    def __build_embeddings(
+        self, emb_list: List[np.ndarray]
+    ) -> VectorIndex:
+        if emb_list:
+            return VectorIndex(np.vstack(emb_list).astype(np.float32))
+        return VectorIndex(np.empty((0, 384), dtype=np.float32))
+
+    def __process_file(
+        self,
+        fp: str,
+        old_grp: Dict[str, List[ChunkRecord]],
+        old_embs: Dict[str, List[np.ndarray]],
+        bld: ManifestBuilder,
+        counts: Dict[str, int],
+        model: Optional[EmbeddingModel],
+    ) -> Tuple[
+        List[ChunkRecord], Optional[np.ndarray], Optional[EmbeddingModel]
+    ]:
+        c_chk: List[ChunkRecord] = old_grp.get(fp, [])
+        c_emb: List[np.ndarray] = old_embs.get(fp, [])
+        status: str = bld.check_status(fp, len(c_chk))
+        counts[status] += 1
+        if status == "unchanged" and len(c_emb) == len(c_chk):
+            emb: Optional[np.ndarray] = (
+                np.array(c_emb, dtype=np.float32) if c_emb else None
+            )
+            return c_chk, emb, model
+        nc: List[ChunkRecord] = self.__pipeline.chunk_file(fp, bld)
+        if not nc:
+            return nc, None, model
+        if model is None:
+            model = EmbeddingModel()
+        return nc, model.encode([c["text"] for c in nc]), model
+
+    def run(self) -> List[ChunkRecord]:
+        old_man, old_grp, old_embs = self.__load_state()
+        bld: ManifestBuilder = ManifestBuilder(old_man)
+        files: List[str] = self.__pipeline.discover_files()
+        counts: Dict[str, int] = {"added": 0, "modified": 0, "unchanged": 0}
+        chunks: List[ChunkRecord] = []
+        emb_list: List[np.ndarray] = []
+        model: Optional[EmbeddingModel] = None
+        for fp in tqdm(files, desc="Indexing", unit="file"):
+            chks, emb, model = self.__process_file(
+                fp, old_grp, old_embs, bld, counts, model
+            )
+            chunks.extend(chks)
+            if emb is not None and len(emb) > 0:
+                emb_list.append(emb)
+        deleted: int = bld.count_deleted(files)
+        changed: bool = bool(counts["added"] or counts["modified"] or deleted)
+        self.__pipeline.audit(chunks)
+        vector_index: VectorIndex = self.__build_embeddings(emb_list)
+        self.__save_state(chunks, bld.manifest, vector_index, changed)
+        self.__print_summary(counts, deleted, len(chunks))
         return chunks

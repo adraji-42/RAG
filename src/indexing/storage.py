@@ -1,8 +1,12 @@
 import os
 import pickle
-from typing import Dict, List, cast
+from collections import OrderedDict
+from typing import Any, Dict, List, Tuple, cast
+
+import numpy as np
 
 from .bm25 import BM25Index
+from ..models import MinimalSource
 from .embeddings import VectorIndex
 from .types import ChunkRecord, ManifestRecord
 
@@ -32,6 +36,24 @@ class IndexStorage:
     def embeddings_path(self) -> str:
         return os.path.join(self.__processed_dir, "embeddings.pkl")
 
+    @property
+    def cache_path(self) -> str:
+        return os.path.join(self.__processed_dir, "cache.pkl")
+
+    def __dump(self, path: str, data: Any) -> None:
+        try:
+            with open(path, "wb") as f:
+                pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+        except OSError:
+            pass
+
+    def __load(self, path: str, default: Any) -> Any:
+        try:
+            with open(path, "rb") as f:
+                return pickle.load(f)
+        except (OSError, EOFError, pickle.UnpicklingError):
+            return default
+
     def has_index(self) -> bool:
         return (
             os.path.isfile(self.chunks_path)
@@ -41,40 +63,62 @@ class IndexStorage:
         )
 
     def save_chunks(self, chunks: List[ChunkRecord]) -> None:
-        with open(self.chunks_path, "wb") as f:
-            pickle.dump(chunks, f, protocol=pickle.HIGHEST_PROTOCOL)
+        self.__dump(self.chunks_path, chunks)
 
     def load_chunks(self) -> List[ChunkRecord]:
-        with open(self.chunks_path, "rb") as f:
-            return cast(List[ChunkRecord], pickle.load(f))
+        return cast(List[ChunkRecord], self.__load(self.chunks_path, []))
 
     def save_manifest(
         self, manifest: Dict[str, ManifestRecord]
     ) -> None:
-        with open(self.manifest_path, "wb") as f:
-            pickle.dump(manifest, f, protocol=pickle.HIGHEST_PROTOCOL)
+        self.__dump(self.manifest_path, manifest)
 
     def load_manifest(self) -> Dict[str, ManifestRecord]:
-        with open(self.manifest_path, "rb") as f:
-            return cast(
-                Dict[str, ManifestRecord], pickle.load(f)
-            )
+        return cast(
+            Dict[str, ManifestRecord], self.__load(self.manifest_path, {})
+        )
 
     def save_bm25(self, index: BM25Index) -> None:
-        with open(self.bm25_path, "wb") as f:
-            pickle.dump(index, f, protocol=pickle.HIGHEST_PROTOCOL)
+        self.__dump(self.bm25_path, index)
 
     def load_bm25(self) -> BM25Index:
-        with open(self.bm25_path, "rb") as f:
-            return cast(BM25Index, pickle.load(f))
+        return cast(
+            BM25Index, self.__load(self.bm25_path, BM25Index([]))
+        )
 
     def save_embeddings(self, index: VectorIndex) -> None:
-        with open(self.embeddings_path, "wb") as f:
-            pickle.dump(index, f, protocol=pickle.HIGHEST_PROTOCOL)
+        self.__dump(self.embeddings_path, index)
 
     def load_embeddings(self) -> VectorIndex:
-        with open(self.embeddings_path, "rb") as f:
-            return cast(VectorIndex, pickle.load(f))
+        empty: np.ndarray = np.empty((0, 384), dtype=np.float32)
+        return cast(
+            VectorIndex,
+            self.__load(self.embeddings_path, VectorIndex(empty)),
+        )
+
+    def load_cache(
+        self,
+    ) -> OrderedDict[Tuple[str, str, int], List[MinimalSource]]:
+        if not os.path.isfile(self.cache_path):
+            return OrderedDict()
+        if (
+            os.path.isfile(self.chunks_path)
+            and os.path.getmtime(self.chunks_path)
+            > os.path.getmtime(self.cache_path)
+        ):
+            return OrderedDict()
+        data = self.__load(self.cache_path, None)
+        return (
+            OrderedDict(data)
+            if isinstance(data, dict)
+            else OrderedDict()
+        )
+
+    def save_cache(
+        self,
+        cache: Dict[Tuple[str, str, int], List[MinimalSource]],
+    ) -> None:
+        self.__dump(self.cache_path, cache)
 
     def save_artifacts(
         self,
@@ -86,3 +130,5 @@ class IndexStorage:
         self.save_manifest(manifest)
         self.save_bm25(BM25Index([c["text"] for c in chunks]))
         self.save_embeddings(vector_index)
+        if os.path.isfile(self.cache_path):
+            os.remove(self.cache_path)
