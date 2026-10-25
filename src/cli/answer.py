@@ -5,15 +5,15 @@ from typing import List, Optional
 from tqdm import tqdm
 
 from .io import CliIO
-from .base import BaseCommand
-from ..generation import AnswerGenerator
-from ..retrieval import BaseRetriever, BM25Retriever, HybridRetriever
 from ..models import (
     MinimalAnswer,
     MinimalSource,
     StudentSearchResults,
     StudentSearchResultsAndAnswer,
 )
+from .base import BaseCommand
+from ..generation import AnswerGenerator
+from ..retrieval import BaseRetriever, BM25Retriever, HybridRetriever
 
 
 class AnswerCommand(BaseCommand):

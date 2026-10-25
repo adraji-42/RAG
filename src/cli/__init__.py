@@ -1,3 +1,5 @@
+from typing import List
+
 from .indexing import IndexCommand
 from .evaluation import EvaluateCommand
 from .search import SearchCommand, SearchDatasetCommand
@@ -54,13 +56,12 @@ class Cli:
         self,
         student_search_results_path: str,
         save_directory: str = "data/output/search_results_and_answer",
-        mode: str = "bm25",
     ) -> None:
         from .answer import AnswerDatasetCommand
 
         AnswerDatasetCommand().cmd(
-            student_search_results_path, save_directory, mode
+            student_search_results_path, save_directory
         )
 
 
-__all__ = ["Cli"]
+__all__: List[str] = ["Cli"]

@@ -1,9 +1,9 @@
 from typing import Dict, Optional
 
+from .io import CliIO
+from .base import BaseCommand
 from ..evaluation import Evaluator
 from ..models import AnsweredQuestion, RagDataset, StudentSearchResults
-from .base import BaseCommand
-from .io import CliIO
 
 
 class EvaluateCommand(BaseCommand):
