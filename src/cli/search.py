@@ -3,13 +3,13 @@ from typing import List, Optional
 
 from tqdm import tqdm
 
+from .io import CliIO
 from ..models import (
     MinimalSearchResults,
     MinimalSource,
     RagDataset,
     StudentSearchResults,
 )
-from .io import CliIO
 from .base import BaseCommand
 from ..retrieval import BaseRetriever, BM25Retriever, HybridRetriever
 
