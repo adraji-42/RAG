@@ -3,12 +3,14 @@ name = "RAG"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
+    "fastapi>=0.162.0",
     "fire>=0.7.1",
     "markdown-it-py>=4.2.0",
     "pydantic>=2.13.5",
     "torch>=2.14.1",
     "tqdm>=4.70.1",
     "transformers>=5.20.2",
+    "uvicorn>=0.54.0",
 ]
 
 [dependency-groups]
