@@ -1,12 +1,11 @@
 import os
 import pickle
 from collections import OrderedDict
-from typing import Any, Dict, List, Tuple, cast
+from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
 
 from .bm25 import BM25Index
-from ..models import MinimalSource
 from .embeddings import VectorIndex
 from .types import ChunkRecord, ManifestRecord
 
@@ -96,9 +95,12 @@ class IndexStorage:
             self.__load(self.embeddings_path, VectorIndex(empty)),
         )
 
-    def load_cache(
-        self,
-    ) -> OrderedDict[Tuple[str, str, int], List[MinimalSource]]:
+    def cache_mtime(self) -> Optional[float]:
+        if not os.path.isfile(self.cache_path):
+            return None
+        return os.path.getmtime(self.cache_path)
+
+    def load_cache(self) -> "OrderedDict[Any, Any]":
         if not os.path.isfile(self.cache_path):
             return OrderedDict()
         if (
@@ -114,10 +116,7 @@ class IndexStorage:
             else OrderedDict()
         )
 
-    def save_cache(
-        self,
-        cache: Dict[Tuple[str, str, int], List[MinimalSource]],
-    ) -> None:
+    def save_cache(self, cache: "Dict[Any, Any]") -> None:
         self.__dump(self.cache_path, cache)
 
     def save_artifacts(

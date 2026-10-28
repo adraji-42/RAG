@@ -1,5 +1,6 @@
 from typing import List
 
+from .serve import ServeCommand
 from .indexing import IndexCommand
 from .evaluation import EvaluateCommand
 from .search import SearchCommand, SearchDatasetCommand
@@ -62,6 +63,14 @@ class Cli:
         AnswerDatasetCommand().cmd(
             student_search_results_path, save_directory
         )
+
+    def serve(
+        self,
+        host: str = "127.0.0.1",
+        port: int = 8000,
+        processed_dir: str = "data/processed",
+    ) -> None:
+        ServeCommand().cmd(host, port, processed_dir)
 
 
 __all__: List[str] = ["Cli"]

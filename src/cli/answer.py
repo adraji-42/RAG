@@ -38,7 +38,9 @@ class AnswerCommand(BaseCommand):
                 f"[{s.first_character_index}:{s.last_character_index}]"
             )
             print(f"{s.file_path} {span}")
-        generator: AnswerGenerator = AnswerGenerator()
+        generator: AnswerGenerator = AnswerGenerator(
+            processed_dir=processed_dir
+        )
         ans: str = generator.generate(query, sources)
         print(f"\nAnswer:\n{ans}")
 
