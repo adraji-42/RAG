@@ -32,12 +32,10 @@ class IncrementalIndexer:
         embs: np.ndarray = self.__storage.load_embeddings().embeddings
         grp_c: Dict[str, List[ChunkRecord]] = {}
         grp_e: Dict[str, List[np.ndarray]] = {}
-        has_e: bool = len(embs) == len(chunks)
-        for i, c in enumerate(chunks):
+        for c, e in zip(chunks, embs):
             fp: str = os.path.normpath(c["source"].file_path)
             grp_c.setdefault(fp, []).append(c)
-            if has_e:
-                grp_e.setdefault(fp, []).append(embs[i])
+            grp_e.setdefault(fp, []).append(e)
         return manifest, grp_c, grp_e
 
     def __save_state(
@@ -85,9 +83,9 @@ class IncrementalIndexer:
     ]:
         c_chk: List[ChunkRecord] = old_grp.get(fp, [])
         c_emb: List[np.ndarray] = old_embs.get(fp, [])
-        status: str = bld.check_status(fp, len(c_chk))
+        status: str = bld.check_status(fp)
         counts[status] += 1
-        if status == "unchanged" and len(c_emb) == len(c_chk):
+        if status == "unchanged":
             emb: Optional[np.ndarray] = (
                 np.array(c_emb, dtype=np.float32) if c_emb else None
             )
@@ -107,7 +105,7 @@ class IncrementalIndexer:
         chunks: List[ChunkRecord] = []
         emb_list: List[np.ndarray] = []
         model: Optional[EmbeddingModel] = None
-        for fp in tqdm(files, desc="Indexing", unit="file"):
+        for fp in tqdm(files, desc="Indexing", unit="file", leave=False):
             chks, emb, model = self.__process_file(
                 fp, old_grp, old_embs, bld, counts, model
             )

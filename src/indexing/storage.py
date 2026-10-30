@@ -1,6 +1,5 @@
 import os
 import pickle
-from collections import OrderedDict
 from typing import Any, Dict, List, Optional, cast
 
 import numpy as np
@@ -100,23 +99,10 @@ class IndexStorage:
             return None
         return os.path.getmtime(self.cache_path)
 
-    def load_cache(self) -> "OrderedDict[Any, Any]":
-        if not os.path.isfile(self.cache_path):
-            return OrderedDict()
-        if (
-            os.path.isfile(self.chunks_path)
-            and os.path.getmtime(self.chunks_path)
-            > os.path.getmtime(self.cache_path)
-        ):
-            return OrderedDict()
-        data = self.__load(self.cache_path, None)
-        return (
-            OrderedDict(data)
-            if isinstance(data, dict)
-            else OrderedDict()
-        )
+    def load_cache(self) -> Dict[Any, Any]:
+        return cast(Dict[Any, Any], self.__load(self.cache_path, {}))
 
-    def save_cache(self, cache: "Dict[Any, Any]") -> None:
+    def save_cache(self, cache: Dict[Any, Any]) -> None:
         self.__dump(self.cache_path, cache)
 
     def save_artifacts(

@@ -38,7 +38,6 @@ class ManifestBuilder:
     def check_status(
         self,
         file_path: str,
-        cached_chunks_len: int,
         content: Optional[str] = None,
     ) -> str:
         norm_path: str = os.path.normpath(file_path)
@@ -46,16 +45,14 @@ class ManifestBuilder:
         if rec is None:
             return "added"
         mtime: float = self.__get_mtime(file_path)
-        ok_len: bool = cached_chunks_len == rec["chunk_count"]
-        if mtime == rec["mtime"] and ok_len:
+        if mtime == rec["mtime"]:
             self.__manifest[norm_path] = rec
             return "unchanged"
         digest: str = self.__compute_hash(file_path, content)
-        if digest and digest == rec["hash"] and ok_len:
+        if digest and digest == rec["hash"]:
             self.__manifest[norm_path] = {
                 "hash": digest,
                 "mtime": mtime,
-                "chunk_count": rec["chunk_count"],
             }
             return "unchanged"
         return "modified"
@@ -65,11 +62,10 @@ class ManifestBuilder:
         return sum(1 for p in self.__old_manifest if p not in cur)
 
     def record(
-        self, file_path: str, content: str, chunk_count: int
+        self, file_path: str, content: str
     ) -> None:
         norm_path: str = os.path.normpath(file_path)
         self.__manifest[norm_path] = {
             "hash": hashlib.sha256(content.encode("utf-8")).hexdigest(),
             "mtime": self.__get_mtime(file_path),
-            "chunk_count": chunk_count,
         }
