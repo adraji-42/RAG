@@ -1,5 +1,5 @@
-VENV_PATH = $(shell uv run python3 -c "import sys; print(sys.prefix)")
 install:
+	@uv venv --all .rag
 	@uv sync
 
 run:
@@ -9,16 +9,16 @@ debug:
 	@uv run python3 -m pdb -m src
 
 lint:
-	@uv run flake8 . --exclude $(VENV_PATH),data/ || true
-	@uv run mypy . --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs --exclude '($(VENV_PATH)|data)' || true
+	@uv run flake8 . --exclude .venv,data/
+	@uv run mypy . --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs --exclude '(.venv|data)'
 
 lint-strict:
-	@uv run flake8 . --exclude $(VENV_PATH),data/ || true
-	@uv run mypy . --strict --exclude '($(VENV_PATH)|data)' || true
+	@uv run flake8 . --exclude .venv,data/
+	@uv run mypy . --strict --exclude '(.venv|data)'
 
 clean:
 	@find . -name "__pycache__" -type d | xargs rm -rf
 	@find . -name ".mypy_cache" -type d | xargs rm -rf
-	@rm -rf $(VENV_PATH)
+	@rm -rf .venv
 
-.PHONY: install run debug lint lint-strict clean
+.PHONY: install run debug clean lint lint-strict
