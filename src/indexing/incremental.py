@@ -97,7 +97,7 @@ class IncrementalIndexer:
             model = EmbeddingModel()
         return nc, model.encode([c["text"] for c in nc]), model
 
-    def run(self) -> List[ChunkRecord]:
+    def run(self) -> None:
         old_man, old_grp, old_embs = self.__load_state()
         bld: ManifestBuilder = ManifestBuilder(old_man)
         files: List[str] = self.__pipeline.discover_files()
@@ -118,4 +118,3 @@ class IncrementalIndexer:
         vector_index: VectorIndex = self.__build_embeddings(emb_list)
         self.__save_state(chunks, bld.manifest, vector_index, changed)
         self.__print_summary(counts, deleted, len(chunks))
-        return chunks

@@ -26,8 +26,7 @@ class Indexer:
 
     def run(self, force: bool = False) -> None:
         if not force and self.__storage.has_index():
-            IncrementalIndexer(self.__pipeline, self.__storage).run()
-            return
+            return IncrementalIndexer(self.__pipeline, self.__storage).run()
         manifest: ManifestBuilder = ManifestBuilder()
         chunks: List[ChunkRecord] = self.__pipeline.chunk_corpus(manifest)
         model: EmbeddingModel = EmbeddingModel()
