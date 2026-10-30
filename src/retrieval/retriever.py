@@ -34,9 +34,7 @@ class BM25Retriever(BaseRetriever):
             return []
         ranked: List[Tuple[int, float]] = self.__bm25.search(query, k=k)
         sources: List[MinimalSource] = [
-            self.__chunks[idx]["source"]
-            for idx, _ in ranked
-            if 0 <= idx < len(self.__chunks)
+            self.__chunks[idx]["source"] for idx, _ in ranked
         ]
         self.__cache.set("bm25", query, k, sources)
         return sources

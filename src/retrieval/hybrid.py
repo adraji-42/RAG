@@ -65,9 +65,7 @@ class HybridRetriever(BaseRetriever):
         semantic = self.__vector.search(query_vec, k=cand_k)
         fused: List[int] = self.__fuse(lexical, semantic, k)
         sources: List[MinimalSource] = [
-            self.__chunks[i]["source"]
-            for i in fused
-            if 0 <= i < len(self.__chunks)
+            self.__chunks[i]["source"] for i in fused
         ]
         self.__cache.set("hybrid", query, k, sources)
         return sources
