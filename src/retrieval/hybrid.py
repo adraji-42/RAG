@@ -48,8 +48,11 @@ class HybridRetriever(BaseRetriever):
 
     def retrieve(self, query: str, k: int = 5) -> List[MinimalSource]:
         if k <= 0 or not query.strip():
-            return []
-        cached: Optional[List[MinimalSource]] = self.__cache.get(
+            raise ValueError(
+                "k must be greater than 0, "
+                "and query must not be empty or contain only whitespace"
+            )
+        cached: Optional[List[MinimalSource]] = self.__cache.get_sources(
             "hybrid", query, k
         )
         if cached is not None:
@@ -67,5 +70,5 @@ class HybridRetriever(BaseRetriever):
         sources: List[MinimalSource] = [
             self.__chunks[i]["source"] for i in fused
         ]
-        self.__cache.set("hybrid", query, k, sources)
+        self.__cache.set_sources("hybrid", query, k, sources)
         return sources

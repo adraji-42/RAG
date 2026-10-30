@@ -23,8 +23,11 @@ class BM25Retriever(BaseRetriever):
 
     def retrieve(self, query: str, k: int = 5) -> List[MinimalSource]:
         if k <= 0 or not query.strip():
-            return []
-        cached: Optional[List[MinimalSource]] = self.__cache.get(
+            raise ValueError(
+                "k must be greater than 0, "
+                "and query must not be empty or contain only whitespace"
+            )
+        cached: Optional[List[MinimalSource]] = self.__cache.get_sources(
             "bm25", query, k
         )
         if cached is not None:
@@ -36,5 +39,5 @@ class BM25Retriever(BaseRetriever):
         sources: List[MinimalSource] = [
             self.__chunks[idx]["source"] for idx, _ in ranked
         ]
-        self.__cache.set("bm25", query, k, sources)
+        self.__cache.set_sources("bm25", query, k, sources)
         return sources

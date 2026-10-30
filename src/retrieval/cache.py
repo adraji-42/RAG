@@ -23,7 +23,7 @@ class QueryCache:
         self.__mtime = mtime
         self.__cache = dict(self.__storage.load_cache())
 
-    def get(
+    def get_sources(
         self, mode: str, query: str, k: int
     ) -> Optional[List[MinimalSource]]:
         self.__reload_if_stale()
@@ -33,7 +33,7 @@ class QueryCache:
             return None
         return cast(List[MinimalSource], list(val))
 
-    def set(
+    def set_sources(
         self, mode: str, query: str, k: int, results: List[MinimalSource]
     ) -> None:
         key: Tuple[str, str, int] = (mode, query.strip(), k)
