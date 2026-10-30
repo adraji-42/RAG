@@ -52,7 +52,8 @@ class AnswerDatasetCommand(BaseCommand):
         generator: AnswerGenerator = AnswerGenerator()
         answers: List[MinimalAnswer] = []
         for item in tqdm(
-            results.search_results, desc="Generating answers", unit="q"
+            results.search_results,
+            desc="Generating answers", unit="q", leave=False
         ):
             ans: str = generator.generate(
                 item.question, item.retrieved_sources

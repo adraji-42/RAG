@@ -46,7 +46,7 @@ class SearchDatasetCommand(BaseCommand):
         )
         results: List[MinimalSearchResults] = []
         for item in tqdm(
-            dataset.rag_questions, desc="Searching", unit="query"
+            dataset.rag_questions, desc="Searching", unit="query", leave=False
         ):
             sources: List[MinimalSource] = retriever.retrieve(
                 item.question, k=k
