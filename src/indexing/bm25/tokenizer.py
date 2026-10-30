@@ -1,5 +1,5 @@
 import re
-from typing import List, Pattern
+from typing import List, Pattern, cast
 
 _TOKEN_RE: Pattern[str] = re.compile(r"\w+(?:[-.:/]\w+)*")
 _TRANS1_RE: Pattern[str] = re.compile(r"([a-z0-9])([A-Z])")
@@ -15,10 +15,10 @@ class Tokenizer:
     def tokenize(text: str) -> List[str]:
         result: List[str] = []
 
-        for raw in _TOKEN_RE.findall(text):
-            if raw.islower() and raw.isalpha():
+        for raw in cast(List[str], _TOKEN_RE.findall(text)):
+            if raw.isalpha():
                 if len(raw) >= 2:
-                    result.append(raw)
+                    result.append(raw.lower())
                 continue
             s: str = _NUM_TRANS2_RE.sub(
                 r"\1 \2", _NUM_TRANS1_RE.sub(
