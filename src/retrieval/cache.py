@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from ..models import MinimalSource
 from ..indexing.storage import IndexStorage
@@ -29,9 +29,9 @@ class QueryCache:
         self.__reload_if_stale()
         key: Tuple[str, str, int] = (mode, query.strip(), k)
         val = self.__cache.get(key)
-        if val is None or not isinstance(val, list):
+        if val is None:
             return None
-        return list(val)
+        return cast(List[MinimalSource], list(val))
 
     def set(
         self, mode: str, query: str, k: int, results: List[MinimalSource]
@@ -47,9 +47,9 @@ class QueryCache:
     def get_answer(self, key: str) -> Optional[str]:
         self.__reload_if_stale()
         val = self.__cache.get(("answer", key))
-        if val is None or not isinstance(val, str):
+        if val is None:
             return None
-        return val
+        return cast(str, val)
 
     def set_answer(self, key: str, answer: str) -> None:
         self.__cache[("answer", key)] = answer
