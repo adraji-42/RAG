@@ -23,13 +23,10 @@ class Indexer:
             max_chunk_size, raw_dir
         )
         self.__storage: IndexStorage = IndexStorage(processed_dir)
-        self.__incremental: IncrementalIndexer = IncrementalIndexer(
-            self.__pipeline, self.__storage
-        )
 
     def run(self, force: bool = False) -> None:
         if not force and self.__storage.has_index():
-            self.__incremental.run()
+            IncrementalIndexer(self.__pipeline, self.__storage).run()
             return
         manifest: ManifestBuilder = ManifestBuilder()
         chunks: List[ChunkRecord] = self.__pipeline.chunk_corpus(manifest)
