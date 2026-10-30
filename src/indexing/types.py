@@ -11,4 +11,3 @@ class ChunkRecord(TypedDict):
 class ManifestRecord(TypedDict):
     hash: str
     mtime: float
-    chunk_count: int
