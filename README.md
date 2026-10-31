@@ -440,7 +440,7 @@ If and only if both the question and the exact character boundaries of every ret
 ### 8. Character-Level IoU Evaluation
 - **Module:** `src/evaluation/metrics.py`
 - **Class:** `Evaluator`
-- **Key Methods:** `compute_iou`, `is_match`, `evaluate_recall_at_k`
+- **Key Methods:** `compute_iou`, `is_match`, `evaluate`
 
 #### 1D Interval Intersection over Union
 Unlike token-overlap approximations (which depend on tokenizer behavior), retrieval precision is measured by character-level interval geometry. Given retrieved interval $R = [s_1, e_1]$ and ground-truth interval $G = [s_2, e_2]$:
