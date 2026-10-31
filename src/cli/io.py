@@ -51,6 +51,9 @@ class CliIO:
     ) -> None:
         os.makedirs(save_dir, exist_ok=True)
         out_path: str = os.path.join(save_dir, filename)
-        with open(out_path, "w", encoding="utf-8") as f:
-            f.write(model.model_dump_json(indent=2))
-        print(f"Saved {message_prefix} to {out_path}")
+        try:
+            with open(out_path, "w", encoding="utf-8") as f:
+                f.write(model.model_dump_json(indent=2))
+            print(f"Saved {message_prefix} to {out_path}")
+        except OSError:
+            print(f"Failed to save {message_prefix}", file=stderr)
