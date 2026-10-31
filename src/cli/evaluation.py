@@ -33,7 +33,7 @@ class EvaluateCommand(BaseCommand):
         if dataset is None:
             return
         evaluator: Evaluator = Evaluator()
-        scores: Dict[int, float] = evaluator.evaluate_recall_at_k(
+        scores: Dict[int, float] = evaluator.evaluate(
             student_results, dataset, k_values=[1, 3, 5, 10]
         )
         count: int = sum(

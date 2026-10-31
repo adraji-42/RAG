@@ -53,7 +53,7 @@ class Evaluator:
         )
         return found / len(gt_sources)
 
-    def __mean_recall_at_k(
+    def __mean_recall(
         self,
         k: int,
         gt_map: Dict[str, AnsweredQuestion],
@@ -67,7 +67,7 @@ class Evaluator:
         )
         return total / len(gt_map)
 
-    def evaluate_recall_at_k(
+    def evaluate(
         self,
         student_results: StudentSearchResults,
         ground_truth: RagDataset,
@@ -86,6 +86,6 @@ class Evaluator:
             for r in student_results.search_results
         }
         return {
-            k: self.__mean_recall_at_k(k, gt_map, student_map)
+            k: self.__mean_recall(k, gt_map, student_map)
             for k in k_values
         }
