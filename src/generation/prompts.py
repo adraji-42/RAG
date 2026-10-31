@@ -22,7 +22,7 @@ class PromptBuilder:
                 s.file_path, "r", encoding="utf-8", errors="replace"
             ) as f:
                 content: str = f.read()
-            return content[s.first_character_index:s.last_character_index]
+            return content[s.first_character_index:s.last_character_index].strip()
         except OSError:
             return None
 
@@ -36,19 +36,12 @@ class PromptBuilder:
             snippet: Optional[str] = PromptBuilder.__read_snippet(s)
             if snippet is None:
                 continue
-            header: str = (
-                f"[{s.file_path} "
-                f"{s.first_character_index}:{s.last_character_index}]\n"
-            )
-            block: str = header + snippet + "\n"
-            if total + len(block) > max_chars:
-                rem: int = max_chars - total
-                if rem > len(header):
-                    parts.append(header + snippet[:rem - len(header)])
+            blen: int = len(f"[{s.file_path}]\n{snippet}")
+            if total + blen > max_chars:
                 break
-            parts.append(block)
-            total += len(block)
-        return "\n".join(parts)
+            parts.append(f"[{s.file_path}]\n{snippet}")
+            total += blen
+        return "\n\n".join(parts)
 
     @staticmethod
     def build_messages(

@@ -1,5 +1,5 @@
 import hashlib
-from typing import Any, List, Optional, cast
+from typing import Any, Dict, List, Optional, cast
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -20,8 +20,8 @@ class AnswerGenerator:
         self.__model_name: str = model_name
         self.__max_new_tokens: int = max_new_tokens
         self.__cache: QueryCache = QueryCache(processed_dir)
-        self.__tokenizer: Optional[Any] = None
-        self.__model: Optional[Any] = None
+        self.__tokenizer: Any = None
+        self.__model: Any = None
 
     def __ensure_loaded(self) -> None:
         if self.__tokenizer is not None:
@@ -35,30 +35,22 @@ class AnswerGenerator:
         cast(torch.nn.Module, self.__model).eval()
 
     def __apply_template(self, messages: List[Any]) -> str:
-        tok: Any = cast(Any, self.__tokenizer)
+        tok: Any = self.__tokenizer
+        kwargs: Dict[str, bool] = {
+            "tokenize": False,
+            "add_generation_prompt": True,
+        }
         try:
-            return cast(
-                str,
-                tok.apply_chat_template(
-                    messages,
-                    tokenize=False,
-                    add_generation_prompt=True,
-                    enable_thinking=False,
-                ),
+            res = tok.apply_chat_template(
+                messages, enable_thinking=False, **kwargs
             )
         except TypeError:
-            return cast(
-                str,
-                tok.apply_chat_template(
-                    messages,
-                    tokenize=False,
-                    add_generation_prompt=True,
-                ),
-            )
+            res = tok.apply_chat_template(messages, **kwargs)
+        return cast(str, res)
 
     def __run_model(self, prompt: str) -> str:
-        tok: Any = cast(Any, self.__tokenizer)
-        mdl: Any = cast(Any, self.__model)
+        tok: Any = self.__tokenizer
+        mdl: Any = self.__model
         inputs = tok(prompt, return_tensors="pt")
         input_len: int = inputs["input_ids"].shape[1]
         with torch.inference_mode():
