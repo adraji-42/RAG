@@ -26,7 +26,12 @@ class Indexer:
 
     def run(self, force: bool = False) -> None:
         if not force and self.__storage.has_index():
-            return IncrementalIndexer(self.__pipeline, self.__storage).run()
+            try:
+                return IncrementalIndexer(
+                    self.__pipeline, self.__storage
+                ).run()
+            except ValueError:
+                print("Index out of sync, reindexing from scratch...")
         manifest: ManifestBuilder = ManifestBuilder()
         chunks: List[ChunkRecord] = self.__pipeline.chunk_corpus(manifest)
         model: EmbeddingModel = EmbeddingModel()

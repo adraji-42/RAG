@@ -32,7 +32,7 @@ class IncrementalIndexer:
         embs: np.ndarray = self.__storage.load_embeddings().embeddings
         grp_c: Dict[str, List[ChunkRecord]] = {}
         grp_e: Dict[str, List[np.ndarray]] = {}
-        for c, e in zip(chunks, embs):
+        for c, e in zip(chunks, embs, strict=True):
             fp: str = os.path.normpath(c["source"].file_path)
             grp_c.setdefault(fp, []).append(c)
             grp_e.setdefault(fp, []).append(e)
