@@ -40,17 +40,17 @@ class ManifestBuilder:
         file_path: str,
         content: Optional[str] = None,
     ) -> str:
-        norm_path: str = os.path.normpath(file_path)
-        rec: Optional[ManifestRecord] = self.__old_manifest.get(norm_path)
+        fp: str = os.path.normpath(file_path)
+        rec: Optional[ManifestRecord] = self.__old_manifest.get(fp)
         if rec is None:
             return "added"
-        mtime: float = self.__get_mtime(norm_path)
+        mtime: float = self.__get_mtime(fp)
         if mtime == rec["mtime"]:
-            self.__manifest[norm_path] = rec
+            self.__manifest[fp] = rec
             return "unchanged"
-        digest: str = self.__compute_hash(norm_path, content)
+        digest: str = self.__compute_hash(fp, content)
         if digest and digest == rec["hash"]:
-            self.__manifest[norm_path] = {
+            self.__manifest[fp] = {
                 "hash": digest,
                 "mtime": mtime,
             }
@@ -64,8 +64,8 @@ class ManifestBuilder:
     def record(
         self, file_path: str, content: str
     ) -> None:
-        norm_path: str = os.path.normpath(file_path)
-        self.__manifest[norm_path] = {
+        fp: str = os.path.normpath(file_path)
+        self.__manifest[fp] = {
             "hash": hashlib.sha256(content.encode("utf-8")).hexdigest(),
-            "mtime": self.__get_mtime(norm_path),
+            "mtime": self.__get_mtime(fp),
         }

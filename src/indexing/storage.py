@@ -100,7 +100,7 @@ class IndexStorage:
         return os.path.getmtime(self.cache_path)
 
     def load_cache(self) -> Dict[Any, Any]:
-        return cast(Dict[Any, Any], self.__load(self.cache_path, {}))
+        return dict(self.__load(self.cache_path, {}))
 
     def save_cache(self, cache: Dict[Any, Any]) -> None:
         self.__dump(self.cache_path, cache)
