@@ -21,5 +21,3 @@ class IndexCommand(BaseCommand):
             indexer.run(force=force)
         except (ValueError, FileNotFoundError, OSError, RuntimeError) as e:
             print(f"Error: {e}", file=sys.stderr)
-        except Exception as e:
-            print(f"Unexpected error: {e}", file=sys.stderr)

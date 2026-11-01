@@ -12,8 +12,8 @@ from ..models import (
     StudentSearchResultsAndAnswer,
 )
 from .base import BaseCommand
+from ..retrieval import BaseRetriever
 from ..generation import AnswerGenerator
-from ..retrieval import BaseRetriever, BM25Retriever, HybridRetriever
 
 
 class AnswerCommand(BaseCommand):
@@ -25,14 +25,7 @@ class AnswerCommand(BaseCommand):
         mode: str = "bm25",
     ) -> None:
         try:
-            if mode not in ("bm25", "hybrid"):
-                raise ValueError(
-                    f"Invalid mode '{mode}'. Must be 'bm25' or 'hybrid'."
-                )
-            retriever: BaseRetriever = (
-                HybridRetriever(processed_dir) if mode == "hybrid"
-                else BM25Retriever(processed_dir)
-            )
+            retriever: BaseRetriever = self.get_retriever(mode, processed_dir)
             sources: List[MinimalSource] = retriever.retrieve(query, k=k)
             for s in sources:
                 p1, p2 = s.first_character_index, s.last_character_index
@@ -40,10 +33,8 @@ class AnswerCommand(BaseCommand):
             gen: AnswerGenerator = AnswerGenerator(processed_dir)
             ans: str = gen.generate(query, sources)
             print(f"\nAnswer:\n{ans}")
-        except (ValueError, FileNotFoundError, RuntimeError) as e:
+        except (ValueError, FileNotFoundError, OSError, RuntimeError) as e:
             print(f"Error: {e}", file=sys.stderr)
-        except Exception as e:
-            print(f"Unexpected error: {e}", file=sys.stderr)
 
 
 class AnswerDatasetCommand(BaseCommand):
@@ -92,7 +83,5 @@ class AnswerDatasetCommand(BaseCommand):
                 Path(student_search_results_path).name,
                 "student_search_results_and_answer",
             )
-        except (ValueError, FileNotFoundError, RuntimeError) as e:
+        except (ValueError, FileNotFoundError, OSError, RuntimeError) as e:
             print(f"Error: {e}", file=sys.stderr)
-        except Exception as e:
-            print(f"Unexpected error: {e}", file=sys.stderr)

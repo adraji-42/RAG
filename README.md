@@ -12,7 +12,7 @@ This project implements a production-grade, highly optimized **Retrieval-Augment
 ```
 src/
 ├── __init__.py
-├── __main__.py               # CLI entrypoint dispatched via python-fire
+├── __main__.py               # Top-level CLI entrypoint with exit code trapping
 ├── models.py                 # Pydantic v2 schemas (MinimalSource, MinimalAnswer, etc.)
 ├── api/                      # REST API microservice
 │   ├── __init__.py
@@ -65,9 +65,9 @@ src/
 │   ├── __init__.py
 │   └── metrics.py            # Evaluator computing 1D interval IoU and Recall@k
 └── cli/                      # Command-line interface subcommands
-    ├── __init__.py           # Cli class mapping Fire actions
+    ├── __init__.py           # Cli class mapping Fire actions with lazy answer imports
     ├── answer.py             # AnswerCommand and AnswerDatasetCommand
-    ├── base.py               # BaseCommand abstract class
+    ├── base.py               # BaseCommand abstract class and get_retriever factory
     ├── evaluation.py         # EvaluateCommand
     ├── indexing.py           # IndexCommand
     ├── io.py                 # CliIO dataset serialization utilities
@@ -99,63 +99,65 @@ The CLI is powered by Google Fire and provides unified access to indexing, searc
 #### A. Corpus Ingestion & Indexing
 Builds or updates the BM25 inverted index, vector embeddings, and chunk metadata:
 ```bash
-# Incremental indexing (scans default raw directory or any specified corpus path)
+# Incremental indexing (scans default raw directory data/raw or any specified corpus path)
 uv run python -m src index
-uv run python -m src index --raw_dir <raw_dir> --processed_dir <processed_dir>
+
+# Index with custom paths and chunk size limits
+uv run python -m src index --max_chunk_size 2000 --raw_dir data/raw --processed_dir data/processed
 
 # Force full re-indexing from scratch
 uv run python -m src index --force
-uv run python -m src index --max_chunk_size <chunk_size> --raw_dir <raw_dir> --processed_dir <processed_dir>
 ```
 
 #### B. Search & Retrieval
 Retrieve relevant source spans for queries using either BM25 (lexical) or Hybrid (lexical + dense semantic) search:
 ```bash
 # Interactive single query search (BM25 mode, default k=5)
-uv run python -m src search --query "<query>" --k <k> --mode bm25
+uv run python -m src search --query "What is PagedAttention?" --k 5 --mode bm25
 
 # Interactive single query search (Hybrid mode with Reciprocal Rank Fusion)
-uv run python -m src search --query "<query>" --k <k> --mode hybrid
+uv run python -m src search --query "What is PagedAttention?" --k 5 --mode hybrid --processed_dir data/processed
 
 # Batch search over a benchmark dataset
 uv run python -m src search_dataset \
-    --dataset_path <dataset_path> \
-    --k <k> \
-    --mode <bm25|hybrid> \
-    --save_directory <save_directory>
+    --dataset_path dataset_docs_public.json \
+    --k 5 \
+    --mode hybrid \
+    --processed_dir data/processed \
+    --save_directory data/output/search_results
 ```
 
 #### C. Quantitative Recall@k Evaluation
 Evaluate search outputs against ground truth datasets using character-level IoU matching:
 ```bash
 uv run python -m src evaluate \
-    --student_search_results_path <student_search_results_path> \
-    --dataset_path <dataset_path>
+    --student_search_results_path data/output/search_results/dataset_docs_public.json \
+    --dataset_path dataset_docs_public.json
 ```
 
 #### D. Answer Generation
 Generate grounded answers conditioned on retrieved context spans using `Qwen/Qwen3-0.6B`:
 ```bash
 # Generate answer for a single prompt
-uv run python -m src answer --query "<query>" --k <k> --mode <bm25|hybrid>
+uv run python -m src answer --query "How does chunking work?" --k 5 --mode hybrid
 
 # Generate answers across an entire search results dataset
 uv run python -m src answer_dataset \
-    --student_search_results_path <student_search_results_path> \
-    --save_directory <save_directory>
+    --student_search_results_path data/output/search_results/dataset_docs_public.json \
+    --save_directory data/output/search_results_and_answer
 ```
 
 #### E. REST API Server
 Launch the FastAPI web service:
 ```bash
-uv run python -m src serve --host <host> --port <port> --processed_dir <processed_dir>
+uv run python -m src serve --host 127.0.0.1 --port 8000 --processed_dir data/processed
 ```
 
 ### 3. REST API Reference & `curl` Examples
 
 #### Health Check
 ```bash
-curl -X GET http://<host>:<port>/health
+curl -X GET http://127.0.0.1:8000/health
 ```
 **Response:**
 ```json
@@ -164,18 +166,18 @@ curl -X GET http://<host>:<port>/health
 
 #### Search Endpoint (`POST /search`)
 ```bash
-curl -X POST http://<host>:<port>/search \
+curl -X POST http://127.0.0.1:8000/search \
      -H "Content-Type: application/json" \
-     -d '{"query": "<query>", "k": <k>, "mode": "<bm25|hybrid>"}'
+     -d '{"query": "How does speculative decoding work?", "k": 5, "mode": "hybrid"}'
 ```
 **Response:**
 ```json
 {
-  "question_id": "<question_id>",
-  "question": "<query>",
+  "question_id": "d3b07384-d113-4ec6-9f8e-d98c0b561c28",
+  "question": "How does speculative decoding work?",
   "retrieved_sources": [
     {
-      "file_path": "<file_path>",
+      "file_path": "data/raw/vllm-0.10.1/vllm/model_executor/layers/spec_decode.py",
       "first_character_index": 1240,
       "last_character_index": 2890
     }
@@ -185,30 +187,39 @@ curl -X POST http://<host>:<port>/search \
 
 #### Answer Endpoint (`POST /answer`)
 ```bash
-curl -X POST http://<host>:<port>/answer \
+curl -X POST http://127.0.0.1:8000/answer \
      -H "Content-Type: application/json" \
-     -d '{"query": "<query>", "k": <k>, "mode": "<bm25|hybrid>"}'
+     -d '{"query": "How does speculative decoding work?", "k": 5, "mode": "hybrid"}'
 ```
 **Response:**
 ```json
 {
-  "question_id": "<question_id>",
-  "question": "<query>",
+  "question_id": "d3b07384-d113-4ec6-9f8e-d98c0b561c28",
+  "question": "How does speculative decoding work?",
   "retrieved_sources": [
     {
-      "file_path": "<file_path>",
+      "file_path": "data/raw/vllm-0.10.1/vllm/model_executor/layers/spec_decode.py",
       "first_character_index": 1240,
       "last_character_index": 2890
     }
   ],
-  "answer": "<generated_answer>"
+  "answer": "Speculative decoding drafts tokens using a smaller proposer model and verifies them in parallel using the target LLM."
 }
 ```
 
-### 4. Development & Quality Assurance
+### 4. Development & Quality Assurance (`make` targets)
 
 ```bash
-# Run flake8 and standard mypy
+# Sync dependencies via uv
+make install
+
+# Execute default application module entrypoint
+make run
+
+# Start interactive python debugger
+make debug
+
+# Run flake8 and standard mypy type checking
 make lint
 
 # Run flake8 and strict mypy verification (zero errors allowed)
@@ -283,12 +294,12 @@ Code search requires indexing identifiers formatted across various naming conven
 
 #### Regex Transition Splitting
 `Tokenizer.tokenize` uses a compiled cascade of four regular expression substitutions:
-1. `_TRANS1_RE` (`([a-z0-9])([A-Z])` -> ` `): Splits camelCase and kebab-to-camel transitions (e.g., `modelExecutor` -> `model Executor`).
-2. `_TRANS2_RE` (`([A-Z]+)([A-Z][a-z])` -> ` `): Splits contiguous uppercase acronyms followed by words (e.g., `LLMRunner` -> `LLM Runner`).
-3. `_NUM_TRANS1_RE` (`([a-zA-Z]{2,})([0-9]+)` -> ` `): Splits letter-to-digit boundaries (e.g., `qwen3` -> `qwen 3`).
-4. `_NUM_TRANS2_RE` (`([0-9]+)([a-zA-Z]{2,})` -> ` `): Splits digit-to-letter boundaries (e.g., `v1alpha` -> `v1 alpha`).
+1. `_TRANS1_RE` (`([a-z0-9])([A-Z])` -> `   `): Splits camelCase and kebab-to-camel transitions (e.g., `modelExecutor` -> `model Executor`).
+2. `_TRANS2_RE` (`([A-Z]+)([A-Z][a-z])` -> `   `): Splits contiguous uppercase acronyms followed by words (e.g., `LLMRunner` -> `LLM Runner`).
+3. `_NUM_TRANS1_RE` (`([a-zA-Z]{2,})([0-9]+)` -> `   `): Splits letter-to-digit boundaries (e.g., `qwen3` -> `qwen 3`).
+4. `_NUM_TRANS2_RE` (`([0-9]+)([a-zA-Z]{2,})` -> `   `): Splits digit-to-letter boundaries (e.g., `v1alpha` -> `v1 alpha`).
 
-#### Fast-Path Optimization
+#### Fast-Path Optimization (`isalpha()`)
 For pure lowercase alphabetic tokens (which constitute >65% of all code tokens like `def`, `return`, `self`, `import`, `tensor`), executing four regex substitutions is wasteful. The tokenizer introduces an $O(1)$ fast path:
 ```python
 if raw.islower() and raw.isalpha():
@@ -324,8 +335,8 @@ Parsing source files with regular expressions breaks syntactic structures. `Pyth
 
 #### AST Markdown Chunking (`src/chunking/markdown/`)
 `MarkdownChunker` uses `markdown-it-py` to parse CommonMark AST tokens:
-1. **Hierarchical Splitter (`HeadingSplitter`):** Extracts headings `h1` through `h6`. When a section exceeds `max_chunk_size`, it recursively splits at the highest available heading priority ($min(lv)$), keeping related sub-sections grouped.
-2. **Atomic Block Isolation (`BlockIsolator`):** Fenced code blocks (`\`\`\`python ... \`\`\``) and markdown tables are identified as atomic blocks. The isolator ensures these structures are never sliced in half; if a code block itself is smaller than `max_chunk_size`, it remains unbroken.
+1. **Hierarchical Splitter (`HeadingSplitter`):** Extracts headings `h1` through `h6`. When a section exceeds `max_chunk_size`, it recursively splits at the highest available heading priority ($\min(lv)$), keeping related sub-sections grouped.
+2. **Atomic Block Isolation (`BlockIsolator`):** Fenced code blocks (```python ... ```) and markdown tables are identified as atomic blocks. The isolator ensures these structures are never sliced in half; if a code block itself is smaller than `max_chunk_size`, it remains unbroken.
 
 #### Recursive Text Splitting (`src/chunking/text/splitter.py`)
 Used for generic text files or as fallback. Implements a 3-tier boundary hierarchy:
@@ -333,7 +344,7 @@ Used for generic text files or as fallback. Implements a 3-tier boundary hierarc
 2. Sentence punctuation boundaries (`_SENTENCE_END = re.compile(r"[.?!]\s+")`).
 3. Individual line splits (`\n`).
 
-#### Greedy Span Packing & Boundary-Safe Splitting (`src/chunking/emitter.py`)
+#### Greedy Span Packing & Backward Boundary Search (`src/chunking/emitter.py`)
 - **`pack()`:** Merges adjacent small spans into larger chunks up to `max_chunk_size`, provided the interstitial gap consists solely of whitespace.
 - **`split_newlines()`:** When an unbreakable token or massive block exceeds `max_chunk_size`, it performs backward search for newline boundaries (`content.rfind("\n", pos, limit)`), falling back to space boundaries (`rfind(" ")`), and only hard-cutting if no whitespace exists within the window.
 
@@ -355,7 +366,7 @@ For an input batch of token embeddings $\mathbf{H} \in \mathbb{R}^{B \times T \t
    $$\mathbf{\hat{v}}_i = \frac{\mathbf{v}_i}{\|\mathbf{v}_i\|_2} = \frac{\mathbf{v}_i}{\sqrt{\sum_{j=1}^D v_{i, j}^2}}$$
    Executed via `torch.nn.functional.normalize(..., p=2, dim=1)` inside a `torch.inference_mode()` context.
 
-#### Linear-Time Top-K Selection ($O(N)$ vs $O(N \log N)$)
+#### Linear-Time Top-K Selection ($O(N)$ via `np.argpartition`)
 Because all document embeddings $\mathbf{E} \in \mathbb{R}^{N \times D}$ and query vectors $\mathbf{q} \in \mathbb{R}^D$ are $L_2$-normalized unit vectors, Cosine Similarity simplifies to a matrix-vector dot product:
 
 $$\text{CosineSimilarity}(\mathbf{e}_i, \mathbf{q}) = \mathbf{e}_i \cdot \mathbf{q}$$
@@ -382,7 +393,7 @@ For $N = 14,079$ and $k = 5$, this eliminates ~200,000 comparisons per search qu
 - **Key Methods:** `retrieve`, `__fuse`
 
 #### Motivation for Rank-Based Fusion
-Lexical BM25 scores are unbounded positive numbers (typically $0.0$ to $35.0+$ depending on document length and term frequencies), whereas dense semantic scores are bounded cosine similarities in $[-1.0, 1.0]$. Naive linear combinations (e.g., $lpha \cdot \text{BM25} + \beta \cdot \text{Cosine}$) require complex per-dataset score normalization (MinMax or Z-score) and are fragile when candidate distributions shift.
+Lexical BM25 scores are unbounded positive numbers (typically $0.0$ to $35.0+$ depending on document length and term frequencies), whereas dense semantic scores are bounded cosine similarities in $[-1.0, 1.0]$. Naive linear combinations (e.g., $\alpha \cdot \text{BM25} + \beta \cdot \text{Cosine}$) require complex per-dataset score normalization (MinMax or Z-score) and are fragile when candidate distributions shift.
 
 #### Reciprocal Rank Fusion Formula
 `HybridRetriever` fetches $k_{\text{cand}} = \max(2k, 10)$ candidates from both `BM25Index` and `VectorIndex`, and fuses their ranked lists using Cormack et al.'s Reciprocal Rank Fusion algorithm:
@@ -391,7 +402,7 @@ $$\text{RRF\_Score}(d) = \sum_{m \in \{\text{lexical}, \text{semantic}\}} \frac{
 
 Where:
 - $k_{\text{rrf}} = 60.0$ is the smoothing constant that prevents outliers in top ranks from dominating the fused ranking.
-- $\text{rank}_m(d) \in \{1, 2, \dots, k_{\text{cand}}\}$ is the 1-based ordinal rank of document $d$ within retriever $m$. If a document is absent from a retriever's candidate list, its reciprocal term for that system is zero.
+- $\text{rank}_m(d) \in \{1, 2, \dots, k_{\text{cand}}\\}$ is the 1-based ordinal rank of document $d$ within retriever $m$. If a document is absent from a retriever's candidate list, its reciprocal term for that system is zero.
 
 The fused candidates are sorted by descending $\text{RRF\_Score}(d)$ and the top-$k$ documents are emitted, combining the precision of exact symbol matching (BM25) with the semantic generalization of transformer embeddings.
 
@@ -404,13 +415,13 @@ The fused candidates are sorted by descending $\text{RRF\_Score}(d)$ and the top
 
 Re-indexing tens of thousands of chunks across a massive repository on every run is unviable. Incremental indexing detects exactly what changed:
 
-#### Two-Stage Change Detection
+#### Two-Stage Change Detection (`mtime` + `SHA-256`)
 In `ManifestBuilder.check_status(file_path)`:
 1. **Stage 1 ($O(1)$ Filesystem Metadata):** Compares the filesystem modification time `os.path.getmtime(file_path)` with the stored `rec["mtime"]` in `manifest.pkl`. If the mtime matches, the file is immediately marked `"unchanged"` without reading a single byte from disk.
 2. **Stage 2 ($O(B)$ Content Hashing):** If the mtime differs (e.g., a file was touched by `git checkout` or opened in an editor), `hashlib.sha256` computes the file's digest and compares it against `rec["hash"]`. If the digest matches, the file is confirmed `"unchanged"` and only its mtime is updated. If the hash differs, the file is categorized as `"modified"`.
 3. Files absent from the prior manifest are categorized as `"added"`.
 
-#### Reuse of Cached Vectors & Lazy Model Loading
+#### Reuse of Cached Vectors & Strict Pairing
 Inside `IncrementalIndexer`:
 - In `__load_state()`: `chunks` and `embs` arrays are loaded from disk and paired via `zip(chunks, embs, strict=True)`.
 - In `__process_file()`: Unchanged files immediately reuse their existing chunks and precomputed embedding rows without re-chunking or re-embedding.
@@ -481,19 +492,26 @@ Evaluated on public benchmark question sets against the `vllm-0.10.1` codebase o
 
 ### Lexical vs. Hybrid Tradeoffs
 1. **Identifier Precision vs. Vocabulary Mismatch:** Lexical BM25 excels when questions specify exact Python class names, function calls, or error messages (e.g., `StatelessProcessGroup`, `initialize_model_parallel`). Pure dense embeddings can suffer from vocabulary mismatch or conflate distinct classes with similar names.
-2. **Concept & Intent Generalization:** For descriptive architectural queries (e.g., `"how does continuous batching handle preemption"`), dense vector search surfaces conceptually relevant spans that lack exact word overlap.
+2. **Concept & Intent Generalization:** For descriptive architectural queries (e.g., *"how does continuous batching handle preemption"*), dense vector search surfaces conceptually relevant spans that lack exact word overlap.
 3. **The Hybrid Advantage:** Hybrid RRF combines both paradigms: exact symbol matches rise to the top while semantic embeddings recover evidence for conceptually phrased questions, boosting Recall@5 on documentation by +3.8% and on code by +4.2% over BM25 alone.
+
+### Failure & Error Analysis
+Qualitative inspection of retrieval misses highlights four primary failure modes:
+- **Broad Ground-Truth Spans vs. Granular AST Chunks:** Several benchmark ground-truth answers encompass entire 300-line class definitions. When the AST splitter breaks oversized classes into granular method chunks to respect `max_chunk_size = 2000`, a retrieved method span may only cover 4% of the massive ground-truth interval, falling just beneath the $\text{IoU} \ge 0.05$ threshold despite containing the exact relevant logic.
+- **Short Cryptic Queries:** Queries containing only 1-2 generic tokens (e.g., *"worker status"*) produce diffuse BM25 scores across hundreds of matching occurrences in `worker.py`, `executor.py`, and `engine.py`. Dense embeddings mitigate this by clustering around architectural entrypoints.
+- **Ambiguous Acronyms in Code:** Term abbreviations (e.g., `TP`, `PP`, `EP` for Tensor, Pipeline, and Expert Parallelism) can score poorly in BM25 if the source file writes out the full name without using the abbreviation, whereas dense semantic search bridges this vocabulary gap.
+- **Context Budget Truncation:** For complex multi-part questions requiring evidence from more than 3 large files, the 6,000-character generation context budget safely cuts off trailing evidence blocks to prevent CPU latency degradation.
 
 ---
 
 ## Design Decisions
 
 ### Hardware-Constrained Architecture
-Designed and tuned to run efficiently on an **Intel Core i5-10600 CPU with only 8 GB of RAM** without out-of-memory (OOM) faults or paging:
-- **`torch.bfloat16` Precision:** Both `sentence-transformers/all-MiniLM-L6-v2` and `Qwen/Qwen3-0.6B` are loaded in 16-bit brain floating point, halving RAM consumption compared to standard float32.
-- **`low_cpu_mem_usage=True`:** Model weights are streamed directly into memory without duplicating layers during PyTorch instantiation.
-- **`enable_thinking=False`:** Thinking/reasoning tokens in Qwen3-0.6B chat templates are disabled to prevent runaway token generation, limiting latency to <2.5s per answer on CPU.
-- **Full Lazy Loading:** Heavy machine learning models (`AutoModel`, `AutoModelForCausalLM`) are never initialized during module imports or CLI discovery; they are instantiated strictly on first call.
+- **`torch.bfloat16` Precision:** Both `sentence-transformers/all-MiniLM-L6-v2` and `Qwen/Qwen3-0.6B` are loaded in 16-bit brain floating point (`torch.bfloat16`), halving RAM consumption compared to standard float32 while retaining high numerical dynamic range.
+- **`low_cpu_mem_usage=True`:** Model weights are streamed directly into target tensors without allocating intermediate full-model state dict duplicates during PyTorch instantiation.
+- **`enable_thinking=False`:** Thinking and reasoning scratchpads in Qwen3-0.6B chat templates are disabled via model generation config and regex filtering (`PromptBuilder.strip_thinking`), preventing runaway generation loops and capping CPU latency to <2.5s per answer.
+- **6,000-Character Context Budget:** `PromptBuilder.build_context` enforces a strict 6,000-character ceiling across packed source snippets. This ensures prompt token sequences remain well within the model's high-efficiency compute window, eliminating quadratic attention slowdowns on CPU.
+- **100% Lazy Loading:** Heavy machine learning models (`AutoModel`, `AutoModelForCausalLM`) are never initialized during module imports or CLI discovery; they are instantiated strictly on first call. Subcommands (`AnswerCommand`, `AnswerDatasetCommand`) are imported lazily inside `Cli` methods in `src/cli/__init__.py`.
 - **OOP Modularity & Legacy Typing:** The codebase enforces zero circular imports, strictly sorted imports by line length, strict OOP separation of concerns, and full static type safety verified with `mypy --strict`.
 
 ---
