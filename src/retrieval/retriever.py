@@ -16,6 +16,11 @@ class BM25Retriever(BaseRetriever):
         self.__bm25: Optional[BM25Index] = None
 
     def __ensure_loaded(self) -> None:
+        if not self.__storage.has_index():
+            raise FileNotFoundError(
+                f"Index not found in '{self.__storage.processed_dir}'. "
+                "Run 'index' first."
+            )
         if self.__chunks is None:
             self.__chunks = self.__storage.load_chunks()
         if self.__bm25 is None:
