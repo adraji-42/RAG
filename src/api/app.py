@@ -29,6 +29,10 @@ class RagApiService:
         return self.__app
 
     def __get_retriever(self, mode: str) -> BaseRetriever:
+        if mode not in ("bm25", "hybrid"):
+            raise ValueError(
+                f"Invalid mode '{mode}'. Must be 'bm25' or 'hybrid'."
+            )
         if mode == "hybrid":
             if self.__hybrid is None:
                 self.__hybrid = HybridRetriever(self.__processed_dir)
@@ -45,30 +49,32 @@ class RagApiService:
         return self.__generator
 
     def __search(self, req: QueryRequest) -> MinimalSearchResults:
-        if not req.query.strip():
-            raise HTTPException(status_code=400, detail="Empty query")
-        sources: List[MinimalSource] = self.__get_retriever(
-            req.mode
-        ).retrieve(req.query, k=req.k)
-        return MinimalSearchResults(
-            question_id=str(uuid.uuid4()),
-            question=req.query,
-            retrieved_sources=sources,
-        )
+        try:
+            sources: List[MinimalSource] = self.__get_retriever(
+                req.mode
+            ).retrieve(req.query, k=req.k)
+            return MinimalSearchResults(
+                question_id=str(uuid.uuid4()),
+                question=req.query,
+                retrieved_sources=sources,
+            )
+        except (ValueError, FileNotFoundError, RuntimeError) as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     def __answer(self, req: QueryRequest) -> MinimalAnswer:
-        if not req.query.strip():
-            raise HTTPException(status_code=400, detail="Empty query")
-        sources: List[MinimalSource] = self.__get_retriever(
-            req.mode
-        ).retrieve(req.query, k=req.k)
-        ans: str = self.__get_generator().generate(req.query, sources)
-        return MinimalAnswer(
-            question_id=str(uuid.uuid4()),
-            question=req.query,
-            retrieved_sources=sources,
-            answer=ans,
-        )
+        try:
+            sources: List[MinimalSource] = self.__get_retriever(
+                req.mode
+            ).retrieve(req.query, k=req.k)
+            ans: str = self.__get_generator().generate(req.query, sources)
+            return MinimalAnswer(
+                question_id=str(uuid.uuid4()),
+                question=req.query,
+                retrieved_sources=sources,
+                answer=ans,
+            )
+        except (ValueError, FileNotFoundError, RuntimeError) as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     def __register_routes(self) -> None:
         @self.__app.get("/health")
