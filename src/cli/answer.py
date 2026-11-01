@@ -24,25 +24,26 @@ class AnswerCommand(BaseCommand):
         processed_dir: str = "data/processed",
         mode: str = "bm25",
     ) -> None:
-        if not query.strip() or k <= 0:
-            print("Invalid query or k value.", file=sys.stderr)
-            return
-        retriever: BaseRetriever = (
-            HybridRetriever(processed_dir)
-            if mode == "hybrid"
-            else BM25Retriever(processed_dir)
-        )
-        sources: List[MinimalSource] = retriever.retrieve(query, k=k)
-        for s in sources:
-            span: str = (
-                f"[{s.first_character_index}:{s.last_character_index}]"
+        try:
+            if mode not in ("bm25", "hybrid"):
+                raise ValueError(
+                    f"Invalid mode '{mode}'. Must be 'bm25' or 'hybrid'."
+                )
+            retriever: BaseRetriever = (
+                HybridRetriever(processed_dir) if mode == "hybrid"
+                else BM25Retriever(processed_dir)
             )
-            print(f"{s.file_path} {span}")
-        generator: AnswerGenerator = AnswerGenerator(
-            processed_dir=processed_dir
-        )
-        ans: str = generator.generate(query, sources)
-        print(f"\nAnswer:\n{ans}")
+            sources: List[MinimalSource] = retriever.retrieve(query, k=k)
+            for s in sources:
+                p1, p2 = s.first_character_index, s.last_character_index
+                print(f"{s.file_path} [{p1}:{p2}]")
+            gen: AnswerGenerator = AnswerGenerator(processed_dir)
+            ans: str = gen.generate(query, sources)
+            print(f"\nAnswer:\n{ans}")
+        except (ValueError, FileNotFoundError, RuntimeError) as e:
+            print(f"Error: {e}", file=sys.stderr)
+        except Exception as e:
+            print(f"Unexpected error: {e}", file=sys.stderr)
 
 
 class AnswerDatasetCommand(BaseCommand):
@@ -73,23 +74,25 @@ class AnswerDatasetCommand(BaseCommand):
         student_search_results_path: str,
         save_directory: str = "data/output/search_results_and_answer"
     ) -> None:
-        student_results: Optional[StudentSearchResults] = (
-            CliIO.load_student_results(student_search_results_path)
-        )
-        if student_results is None:
-            return
-        answers: List[MinimalAnswer] = self.__generate_answers(
-            student_results
-        )
-        result: StudentSearchResultsAndAnswer = (
-            StudentSearchResultsAndAnswer(
-                search_results=answers,
-                k=student_results.k,
+        try:
+            student_results: Optional[StudentSearchResults] = (
+                CliIO.load_student_results(student_search_results_path)
             )
-        )
-        CliIO.save_result_file(
-            result,
-            save_directory,
-            Path(student_search_results_path).name,
-            "student_search_results_and_answer",
-        )
+            if student_results is None:
+                return
+            answers: List[MinimalAnswer] = self.__generate_answers(
+                student_results
+            )
+            CliIO.save_result_file(
+                StudentSearchResultsAndAnswer(
+                    search_results=answers,
+                    k=student_results.k,
+                ),
+                save_directory,
+                Path(student_search_results_path).name,
+                "student_search_results_and_answer",
+            )
+        except (ValueError, FileNotFoundError, RuntimeError) as e:
+            print(f"Error: {e}", file=sys.stderr)
+        except Exception as e:
+            print(f"Unexpected error: {e}", file=sys.stderr)

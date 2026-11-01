@@ -1,3 +1,5 @@
+import sys
+
 import uvicorn
 
 from .base import BaseCommand
@@ -11,5 +13,10 @@ class ServeCommand(BaseCommand):
         port: int = 8000,
         processed_dir: str = "data/processed",
     ) -> None:
-        service: RagApiService = RagApiService(processed_dir)
-        uvicorn.run(service.app, host=host, port=port)
+        try:
+            service: RagApiService = RagApiService(processed_dir)
+            uvicorn.run(service.app, host=host, port=port)
+        except (ValueError, FileNotFoundError, RuntimeError) as e:
+            print(f"Error: {e}", file=sys.stderr)
+        except Exception as e:
+            print(f"Unexpected error: {e}", file=sys.stderr)

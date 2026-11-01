@@ -1,3 +1,4 @@
+import sys
 from typing import Dict, Optional
 
 from .io import CliIO
@@ -22,23 +23,28 @@ class EvaluateCommand(BaseCommand):
     def cmd(
         self, student_search_results_path: str, dataset_path: str
     ) -> None:
-        student_results: Optional[StudentSearchResults] = (
-            CliIO.load_student_results(student_search_results_path)
-        )
-        if student_results is None:
-            return
-        dataset: Optional[RagDataset] = CliIO.load_eval_dataset(
-            dataset_path
-        )
-        if dataset is None:
-            return
-        evaluator: Evaluator = Evaluator()
-        scores: Dict[int, float] = evaluator.evaluate(
-            student_results, dataset, k_values=[1, 3, 5, 10]
-        )
-        count: int = sum(
-            1
-            for q in dataset.rag_questions
-            if isinstance(q, AnsweredQuestion) and q.sources
-        )
-        self.__print_eval_report(scores, count)
+        try:
+            student_results: Optional[StudentSearchResults] = (
+                CliIO.load_student_results(student_search_results_path)
+            )
+            if student_results is None:
+                return
+            dataset: Optional[RagDataset] = CliIO.load_eval_dataset(
+                dataset_path
+            )
+            if dataset is None:
+                return
+            evaluator: Evaluator = Evaluator()
+            scores: Dict[int, float] = evaluator.evaluate(
+                student_results, dataset, k_values=[1, 3, 5, 10]
+            )
+            count: int = sum(
+                1
+                for q in dataset.rag_questions
+                if isinstance(q, AnsweredQuestion) and q.sources
+            )
+            self.__print_eval_report(scores, count)
+        except (ValueError, FileNotFoundError, RuntimeError) as e:
+            print(f"Error: {e}", file=sys.stderr)
+        except Exception as e:
+            print(f"Unexpected error: {e}", file=sys.stderr)

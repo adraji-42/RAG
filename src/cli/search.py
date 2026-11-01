@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from typing import List, Optional
 
@@ -22,17 +23,23 @@ class SearchCommand(BaseCommand):
         processed_dir: str = "data/processed",
         mode: str = "bm25",
     ) -> None:
-        retriever: BaseRetriever = (
-            HybridRetriever(processed_dir)
-            if mode == "hybrid"
-            else BM25Retriever(processed_dir)
-        )
-        sources: List[MinimalSource] = retriever.retrieve(query, k)
-        for s in sources:
-            span: str = (
-                f"[{s.first_character_index}:{s.last_character_index}]"
+        try:
+            if mode not in ("bm25", "hybrid"):
+                raise ValueError(
+                    f"Invalid mode '{mode}'. Must be 'bm25' or 'hybrid'."
+                )
+            retriever: BaseRetriever = (
+                HybridRetriever(processed_dir) if mode == "hybrid"
+                else BM25Retriever(processed_dir)
             )
-            print(f"{s.file_path} {span}")
+            sources: List[MinimalSource] = retriever.retrieve(query, k)
+            for s in sources:
+                p1, p2 = s.first_character_index, s.last_character_index
+                print(f"{s.file_path} [{p1}:{p2}]")
+        except (ValueError, FileNotFoundError, RuntimeError) as e:
+            print(f"Error: {e}", file=sys.stderr)
+        except Exception as e:
+            print(f"Unexpected error: {e}", file=sys.stderr)
 
 
 class SearchDatasetCommand(BaseCommand):
@@ -40,17 +47,23 @@ class SearchDatasetCommand(BaseCommand):
         self, dataset: RagDataset, k: int, processed_dir: str, mode: str
     ) -> List[MinimalSearchResults]:
         retriever: BaseRetriever = (
-            HybridRetriever(processed_dir)
-            if mode == "hybrid"
+            HybridRetriever(processed_dir) if mode == "hybrid"
             else BM25Retriever(processed_dir)
         )
         results: List[MinimalSearchResults] = []
         for item in tqdm(
             dataset.rag_questions, desc="Searching", unit="query", leave=False
         ):
-            sources: List[MinimalSource] = retriever.retrieve(
-                item.question, k=k
-            )
+            try:
+                sources: List[MinimalSource] = retriever.retrieve(
+                    item.question, k=k
+                )
+            except ValueError as e:
+                print(
+                    f"Warning: skipping invalid query "
+                    f"'{item.question_id}': {e}", file=sys.stderr
+                )
+                sources = []
             results.append(
                 MinimalSearchResults(
                     question_id=item.question_id,
@@ -68,18 +81,25 @@ class SearchDatasetCommand(BaseCommand):
         processed_dir: str = "data/processed",
         mode: str = "bm25",
     ) -> None:
-        dataset: Optional[RagDataset] = CliIO.load_dataset(dataset_path)
-        if dataset is None:
-            return
-        results: List[MinimalSearchResults] = self.__search_queries(
-            dataset, k, processed_dir, mode
-        )
-        student_results: StudentSearchResults = StudentSearchResults(
-            search_results=results, k=k
-        )
-        CliIO.save_result_file(
-            student_results,
-            save_directory,
-            Path(dataset_path).name,
-            "student_search_results",
-        )
+        try:
+            if k <= 0:
+                raise ValueError("k must be greater than 0")
+            if mode not in ("bm25", "hybrid"):
+                raise ValueError(
+                    f"Invalid mode '{mode}'. Must be 'bm25' or 'hybrid'."
+                )
+            dataset: Optional[RagDataset] = CliIO.load_dataset(dataset_path)
+            if dataset is None:
+                return
+            results: List[MinimalSearchResults] = (
+                self.__search_queries(dataset, k, processed_dir, mode)
+            )
+            CliIO.save_result_file(
+                StudentSearchResults(search_results=results, k=k),
+                save_directory, Path(dataset_path).name,
+                "student_search_results",
+            )
+        except (ValueError, FileNotFoundError, RuntimeError) as e:
+            print(f"Error: {e}", file=sys.stderr)
+        except Exception as e:
+            print(f"Unexpected error: {e}", file=sys.stderr)
