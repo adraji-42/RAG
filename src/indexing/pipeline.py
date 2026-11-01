@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from typing import Dict, List
 
@@ -41,7 +42,11 @@ class ChunkingPipeline:
     def chunk_file(
         self, fp: str, manifest: ManifestBuilder
     ) -> List[ChunkRecord]:
-        content: str = self.__reader.read_file(fp)
+        try:
+            content: str = self.__reader.read_file(fp)
+        except OSError as e:
+            print(f"Warning: {e}", file=sys.stderr)
+            return []
         if not content:
             manifest.record(fp, content)
             return []
