@@ -43,14 +43,16 @@ class IndexStorage:
             with open(path, "wb") as f:
                 pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
         except OSError:
-            pass
+            raise OSError(f"Failed to write file: {path}")
 
     def __load(self, path: str, default: Any) -> Any:
+        if not os.path.isfile(path):
+            return default
         try:
             with open(path, "rb") as f:
                 return pickle.load(f)
         except (OSError, EOFError, pickle.UnpicklingError):
-            return default
+            raise RuntimeError(f"Corrupted or unreadable index file: {path}")
 
     def has_index(self) -> bool:
         return (

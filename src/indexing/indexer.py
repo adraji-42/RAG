@@ -1,3 +1,4 @@
+import sys
 from typing import List
 
 import numpy as np
@@ -31,7 +32,10 @@ class Indexer:
                     self.__pipeline, self.__storage
                 ).run()
             except ValueError:
-                print("Index out of sync, reindexing from scratch...")
+                print(
+                    "Warning: index out of sync, reindexing from scratch...",
+                    file=sys.stderr,
+                )
         manifest: ManifestBuilder = ManifestBuilder()
         chunks: List[ChunkRecord] = self.__pipeline.chunk_corpus(manifest)
         model: EmbeddingModel = EmbeddingModel()

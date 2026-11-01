@@ -8,6 +8,8 @@ class CorpusReader:
     def __init__(
         self, raw_dir: str, supported_extensions: List[str]
     ) -> None:
+        if not os.path.isdir(raw_dir):
+            raise FileNotFoundError(f"Raw directory not found: {raw_dir}")
         self.__raw_dir: str = raw_dir
         self.__supported_extensions: Set[str] = set(supported_extensions)
 
@@ -26,4 +28,4 @@ class CorpusReader:
             ) as f:
                 return f.read()
         except OSError:
-            return ""
+            raise OSError(f"Failed to read file: {file_path}")
