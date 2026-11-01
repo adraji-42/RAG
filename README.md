@@ -412,7 +412,7 @@ In `ManifestBuilder.check_status(file_path)`:
 
 #### Reuse of Cached Vectors & Lazy Model Loading
 Inside `IncrementalIndexer`:
-- In `__load_state()`: `chunks` and `embs` arrays are loaded from disk and paired via `zip(chunks, embs)`.
+- In `__load_state()`: `chunks` and `embs` arrays are loaded from disk and paired via `zip(chunks, embs, strict=True)`.
 - In `__process_file()`: Unchanged files immediately reuse their existing chunks and precomputed embedding rows without re-chunking or re-embedding.
 - In `run()`: The heavyweight `EmbeddingModel` (~100M parameters) is lazy-loaded **only if** `counts["added"] > 0` or `counts["modified"] > 0`. If all files are unchanged, indexing completes in ~0.2 seconds without initializing PyTorch or CUDA runtimes.
 

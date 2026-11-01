@@ -29,7 +29,7 @@ class AnswerGenerator:
         self.__tokenizer = AutoTokenizer.from_pretrained(self.__model_name)
         self.__model = AutoModelForCausalLM.from_pretrained(
             self.__model_name,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             low_cpu_mem_usage=True,
         )
         cast(torch.nn.Module, self.__model).eval()

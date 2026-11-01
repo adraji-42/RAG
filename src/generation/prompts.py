@@ -22,7 +22,9 @@ class PromptBuilder:
                 s.file_path, "r", encoding="utf-8", errors="replace"
             ) as f:
                 content: str = f.read()
-            return content[s.first_character_index:s.last_character_index].strip()
+            return content[
+                s.first_character_index:s.last_character_index
+            ].strip()
         except OSError:
             return None
 
@@ -36,10 +38,11 @@ class PromptBuilder:
             snippet: Optional[str] = PromptBuilder.__read_snippet(s)
             if snippet is None:
                 continue
-            blen: int = len(f"[{s.file_path}]\n{snippet}")
+            block: str = f"[{s.file_path}]\n{snippet}"
+            blen: int = len(block)
             if total + blen > max_chars:
                 break
-            parts.append(f"[{s.file_path}]\n{snippet}")
+            parts.append(block)
             total += blen
         return "\n\n".join(parts)
 
