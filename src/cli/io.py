@@ -14,8 +14,10 @@ class CliIO:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 return RagDataset.model_validate_json(f.read())
-        except (ValidationError, OSError):
-            print(f"Failed to read dataset file: {path}", file=stderr)
+        except (ValidationError, OSError) as e:
+            print(
+                f"Failed to read dataset file '{path}': {e}", file=stderr
+            )
             return None
 
     @staticmethod
@@ -26,8 +28,11 @@ class CliIO:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 return StudentSearchResults.model_validate_json(f.read())
-        except (ValidationError, OSError):
-            print(f"Invalid student search results file: {path}", file=stderr)
+        except (ValidationError, OSError) as e:
+            print(
+                f"Invalid student search results file '{path}': {e}",
+                file=stderr,
+            )
             return None
 
     @staticmethod
@@ -38,8 +43,10 @@ class CliIO:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 return RagDataset.model_validate_json(f.read())
-        except (ValidationError, OSError):
-            print(f"Invalid dataset file: {path}", file=stderr)
+        except (ValidationError, OSError) as e:
+            print(
+                f"Invalid dataset file '{path}': {e}", file=stderr
+            )
             return None
 
     @staticmethod
@@ -55,5 +62,5 @@ class CliIO:
             with open(out_path, "w", encoding="utf-8") as f:
                 f.write(model.model_dump_json(indent=2))
             print(f"Saved {message_prefix} to {out_path}")
-        except OSError:
-            print(f"Failed to save {message_prefix}", file=stderr)
+        except OSError as e:
+            print(f"Failed to save {message_prefix}: {e}", file=stderr)
