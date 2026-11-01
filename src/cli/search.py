@@ -12,7 +12,7 @@ from ..models import (
     StudentSearchResults,
 )
 from .base import BaseCommand
-from ..retrieval import BaseRetriever, BM25Retriever, HybridRetriever
+from ..retrieval import BaseRetriever
 
 
 class SearchCommand(BaseCommand):
@@ -24,32 +24,20 @@ class SearchCommand(BaseCommand):
         mode: str = "bm25",
     ) -> None:
         try:
-            if mode not in ("bm25", "hybrid"):
-                raise ValueError(
-                    f"Invalid mode '{mode}'. Must be 'bm25' or 'hybrid'."
-                )
-            retriever: BaseRetriever = (
-                HybridRetriever(processed_dir) if mode == "hybrid"
-                else BM25Retriever(processed_dir)
-            )
+            retriever: BaseRetriever = self.get_retriever(mode, processed_dir)
             sources: List[MinimalSource] = retriever.retrieve(query, k)
             for s in sources:
                 p1, p2 = s.first_character_index, s.last_character_index
                 print(f"{s.file_path} [{p1}:{p2}]")
-        except (ValueError, FileNotFoundError, RuntimeError) as e:
+        except (ValueError, FileNotFoundError, OSError, RuntimeError) as e:
             print(f"Error: {e}", file=sys.stderr)
-        except Exception as e:
-            print(f"Unexpected error: {e}", file=sys.stderr)
 
 
 class SearchDatasetCommand(BaseCommand):
     def __search_queries(
         self, dataset: RagDataset, k: int, processed_dir: str, mode: str
     ) -> List[MinimalSearchResults]:
-        retriever: BaseRetriever = (
-            HybridRetriever(processed_dir) if mode == "hybrid"
-            else BM25Retriever(processed_dir)
-        )
+        retriever: BaseRetriever = self.get_retriever(mode, processed_dir)
         results: List[MinimalSearchResults] = []
         for item in tqdm(
             dataset.rag_questions, desc="Searching", unit="query", leave=False
@@ -84,10 +72,6 @@ class SearchDatasetCommand(BaseCommand):
         try:
             if k <= 0:
                 raise ValueError("k must be greater than 0")
-            if mode not in ("bm25", "hybrid"):
-                raise ValueError(
-                    f"Invalid mode '{mode}'. Must be 'bm25' or 'hybrid'."
-                )
             dataset: Optional[RagDataset] = CliIO.load_dataset(dataset_path)
             if dataset is None:
                 return
@@ -99,7 +83,5 @@ class SearchDatasetCommand(BaseCommand):
                 save_directory, Path(dataset_path).name,
                 "student_search_results",
             )
-        except (ValueError, FileNotFoundError, RuntimeError) as e:
+        except (ValueError, FileNotFoundError, OSError, RuntimeError) as e:
             print(f"Error: {e}", file=sys.stderr)
-        except Exception as e:
-            print(f"Unexpected error: {e}", file=sys.stderr)
