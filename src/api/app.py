@@ -58,7 +58,7 @@ class RagApiService:
                 question=req.query,
                 retrieved_sources=sources,
             )
-        except (ValueError, FileNotFoundError, RuntimeError) as e:
+        except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
     def __answer(self, req: QueryRequest) -> MinimalAnswer:
@@ -73,7 +73,7 @@ class RagApiService:
                 retrieved_sources=sources,
                 answer=ans,
             )
-        except (ValueError, FileNotFoundError, RuntimeError) as e:
+        except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
     def __register_routes(self) -> None:
