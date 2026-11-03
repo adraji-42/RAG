@@ -63,9 +63,7 @@ class EmbeddingModel:
             pooled: torch.Tensor = self.__mean_pooling(
                 out, enc["attention_mask"]
             )
-            norm: torch.Tensor = torch.nn.functional.normalize(
-                pooled, p=2, dim=1
-            )
+            norm: torch.Tensor = torch.nn.functional.normalize(pooled)
             return norm.numpy().astype(np.float32)
 
     def encode(
