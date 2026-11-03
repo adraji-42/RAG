@@ -27,6 +27,11 @@ class HybridRetriever(BaseRetriever):
                 f"Index not found in '{self.__storage.processed_dir}'. "
                 "Run 'index' first."
             )
+        if not self.__storage.has_embeddings():
+            raise FileNotFoundError(
+                f"Embeddings not found in '{self.__storage.processed_dir}'. "
+                "Run 'index --embed' first."
+            )
         if self.__chunks is None:
             self.__chunks = self.__storage.load_chunks()
         if self.__bm25 is None:

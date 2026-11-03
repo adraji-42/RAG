@@ -21,7 +21,7 @@ class IncrementalIndexer:
         self.__storage: IndexStorage = storage
 
     def __load_state(
-        self,
+        self, with_embed: bool = True
     ) -> Tuple[
         Dict[str, ManifestRecord],
         Dict[str, List[ChunkRecord]],
@@ -29,11 +29,17 @@ class IncrementalIndexer:
     ]:
         manifest: Dict[str, ManifestRecord] = self.__storage.load_manifest()
         chunks: List[ChunkRecord] = self.__storage.load_chunks()
-        embs: np.ndarray = self.__storage.load_embeddings().embeddings
         grp_c: Dict[str, List[ChunkRecord]] = {}
         grp_e: Dict[str, List[np.ndarray]] = {}
+        fp: str = ""
+        if not with_embed:
+            for c in chunks:
+                fp = os.path.normpath(c["source"].file_path)
+                grp_c.setdefault(fp, []).append(c)
+            return manifest, grp_c, grp_e
+        embs: np.ndarray = self.__storage.load_embeddings().embeddings
         for c, e in zip(chunks, embs, strict=True):
-            fp: str = os.path.normpath(c["source"].file_path)
+            fp = os.path.normpath(c["source"].file_path)
             grp_c.setdefault(fp, []).append(c)
             grp_e.setdefault(fp, []).append(e)
         return manifest, grp_c, grp_e
@@ -42,7 +48,7 @@ class IncrementalIndexer:
         self,
         chunks: List[ChunkRecord],
         manifest: Dict[str, ManifestRecord],
-        vector_index: VectorIndex,
+        vector_index: Optional[VectorIndex],
         changed: bool,
     ) -> None:
         if changed:
@@ -78,6 +84,7 @@ class IncrementalIndexer:
         bld: ManifestBuilder,
         counts: Dict[str, int],
         model: Optional[EmbeddingModel],
+        with_embed: bool = True,
     ) -> Tuple[
         List[ChunkRecord], Optional[np.ndarray], Optional[EmbeddingModel]
     ]:
@@ -91,14 +98,15 @@ class IncrementalIndexer:
             )
             return c_chk, emb, model
         nc: List[ChunkRecord] = self.__pipeline.chunk_file(fp, bld)
-        if not nc:
+        if not nc or not with_embed:
             return nc, None, model
         if model is None:
             model = EmbeddingModel()
         return nc, model.encode([c["text"] for c in nc]), model
 
-    def run(self) -> None:
-        old_man, old_grp, old_embs = self.__load_state()
+    def run(self, embed: bool = False) -> None:
+        with_embed: bool = embed or self.__storage.has_embeddings()
+        old_man, old_grp, old_embs = self.__load_state(with_embed)
         bld: ManifestBuilder = ManifestBuilder(old_man)
         files: List[str] = self.__pipeline.discover_files()
         counts: Dict[str, int] = {"added": 0, "modified": 0, "unchanged": 0}
@@ -107,7 +115,7 @@ class IncrementalIndexer:
         model: Optional[EmbeddingModel] = None
         for fp in tqdm(files, desc="Indexing", unit="file", leave=False):
             chks, emb, model = self.__process_file(
-                fp, old_grp, old_embs, bld, counts, model
+                fp, old_grp, old_embs, bld, counts, model, with_embed
             )
             chunks.extend(chks)
             if emb is not None and len(emb) > 0:
@@ -115,6 +123,8 @@ class IncrementalIndexer:
         deleted: int = bld.count_deleted(files)
         changed: bool = bool(counts["added"] or counts["modified"] or deleted)
         self.__pipeline.audit(chunks)
-        vector_index: VectorIndex = self.__build_embeddings(emb_list)
+        vector_index: Optional[VectorIndex] = (
+            self.__build_embeddings(emb_list) if with_embed else None
+        )
         self.__save_state(chunks, bld.manifest, vector_index, changed)
         self.__print_summary(counts, deleted, len(chunks))

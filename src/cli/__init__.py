@@ -13,8 +13,11 @@ class Cli:
         raw_dir: str = "data/raw",
         processed_dir: str = "data/processed",
         force: bool = False,
+        embed: bool = False,
     ) -> None:
-        IndexCommand().cmd(max_chunk_size, raw_dir, processed_dir, force)
+        IndexCommand().cmd(
+            max_chunk_size, raw_dir, processed_dir, force, embed
+        )
 
     def search(
         self,

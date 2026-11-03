@@ -1,5 +1,5 @@
 import sys
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 
@@ -25,12 +25,13 @@ class Indexer:
         )
         self.__storage: IndexStorage = IndexStorage(processed_dir)
 
-    def run(self, force: bool = False) -> None:
-        if not force and self.__storage.has_index():
+    def run(self, force: bool = False, embed: bool = False) -> None:
+        can_incr: bool = not embed or self.__storage.has_embeddings()
+        if not force and self.__storage.has_index() and can_incr:
             try:
                 return IncrementalIndexer(
                     self.__pipeline, self.__storage
-                ).run()
+                ).run(embed=embed)
             except ValueError:
                 print(
                     "Warning: index out of sync, reindexing from scratch...",
@@ -38,9 +39,11 @@ class Indexer:
                 )
         manifest: ManifestBuilder = ManifestBuilder()
         chunks: List[ChunkRecord] = self.__pipeline.chunk_corpus(manifest)
-        model: EmbeddingModel = EmbeddingModel()
-        embeddings: np.ndarray = model.encode([c["text"] for c in chunks])
-        vector_index: VectorIndex = VectorIndex(embeddings)
+        vector_index: Optional[VectorIndex] = None
+        if embed:
+            model: EmbeddingModel = EmbeddingModel()
+            embeddings: np.ndarray = model.encode([c["text"] for c in chunks])
+            vector_index = VectorIndex(embeddings)
         self.__storage.save_artifacts(chunks, manifest.manifest, vector_index)
         print(
             f"Ingestion complete! Indexed {len(chunks)} "

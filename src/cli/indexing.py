@@ -11,6 +11,7 @@ class IndexCommand(BaseCommand):
         raw_dir: str = "data/raw",
         processed_dir: str = "data/processed",
         force: bool = False,
+        embed: bool = False,
     ) -> None:
         try:
             indexer: Indexer = Indexer(
@@ -18,6 +19,6 @@ class IndexCommand(BaseCommand):
                 raw_dir=raw_dir,
                 processed_dir=processed_dir,
             )
-            indexer.run(force=force)
-        except (ValueError, FileNotFoundError, OSError, RuntimeError) as e:
+            indexer.run(force=force, embed=embed)
+        except (ValueError, OSError, RuntimeError) as e:
             print(f"Error: {e}", file=sys.stderr)

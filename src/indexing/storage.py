@@ -59,8 +59,10 @@ class IndexStorage:
             os.path.isfile(self.chunks_path)
             and os.path.isfile(self.manifest_path)
             and os.path.isfile(self.bm25_path)
-            and os.path.isfile(self.embeddings_path)
         )
+
+    def has_embeddings(self) -> bool:
+        return os.path.isfile(self.embeddings_path)
 
     def save_chunks(self, chunks: List[ChunkRecord]) -> None:
         self.__dump(self.chunks_path, chunks)
@@ -111,11 +113,12 @@ class IndexStorage:
         self,
         chunks: List[ChunkRecord],
         manifest: Dict[str, ManifestRecord],
-        vector_index: VectorIndex,
+        vector_index: Optional[VectorIndex] = None,
     ) -> None:
         self.save_chunks(chunks)
         self.save_manifest(manifest)
         self.save_bm25(BM25Index([c["text"] for c in chunks]))
-        self.save_embeddings(vector_index)
+        if vector_index is not None:
+            self.save_embeddings(vector_index)
         if os.path.isfile(self.cache_path):
             os.remove(self.cache_path)
