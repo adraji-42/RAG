@@ -33,7 +33,7 @@ class AnswerCommand(BaseCommand):
             gen: AnswerGenerator = AnswerGenerator(processed_dir)
             ans: str = gen.generate(query, sources)
             print(f"\nAnswer:\n{ans}")
-        except (ValueError, FileNotFoundError, OSError, RuntimeError) as e:
+        except (ValueError, OSError, RuntimeError) as e:
             print(f"Error: {e}", file=sys.stderr)
 
 
@@ -83,5 +83,5 @@ class AnswerDatasetCommand(BaseCommand):
                 Path(student_search_results_path).name,
                 "student_search_results_and_answer",
             )
-        except (ValueError, FileNotFoundError, OSError, RuntimeError) as e:
+        except (ValueError, OSError, RuntimeError) as e:
             print(f"Error: {e}", file=sys.stderr)

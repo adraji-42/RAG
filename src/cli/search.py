@@ -29,7 +29,7 @@ class SearchCommand(BaseCommand):
             for s in sources:
                 p1, p2 = s.first_character_index, s.last_character_index
                 print(f"{s.file_path} [{p1}:{p2}]")
-        except (ValueError, FileNotFoundError, OSError, RuntimeError) as e:
+        except (ValueError, OSError, RuntimeError) as e:
             print(f"Error: {e}", file=sys.stderr)
 
 
@@ -83,5 +83,5 @@ class SearchDatasetCommand(BaseCommand):
                 save_directory, Path(dataset_path).name,
                 "student_search_results",
             )
-        except (ValueError, FileNotFoundError, OSError, RuntimeError) as e:
+        except (ValueError, OSError, RuntimeError) as e:
             print(f"Error: {e}", file=sys.stderr)
