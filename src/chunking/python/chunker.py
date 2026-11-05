@@ -1,3 +1,5 @@
+"""AST-guided syntax-aware chunker for Python source code files."""
+
 import ast
 from typing import List
 
@@ -11,13 +13,28 @@ from .function_splitter import FunctionSplitter
 
 
 class PythonChunker(BaseChunker):
+    """Chunk Python source files using AST statement extraction."""
 
     def __init__(self, max_chunk_size: int = 2000) -> None:
+        """Initialize Python chunker with a maximum character size.
+
+        Args:
+            max_chunk_size: Maximum allowed characters per chunk.
+        """
         super().__init__(max_chunk_size)
 
     def chunk(
         self, file_path: str, content: str,
     ) -> List[MinimalSource]:
+        """Parse Python code into AST spans and emit minimal source chunks.
+
+        Args:
+            file_path: Source Python file path string.
+            content: Python source code content.
+
+        Returns:
+            List of MinimalSource chunks representing syntax-aware spans.
+        """
         try:
             tree: ast.Module = ast.parse(content)
         except SyntaxError:
@@ -41,6 +58,15 @@ class PythonChunker(BaseChunker):
     def __fill_gaps(
         self, spans: List[Span], total: int,
     ) -> List[Span]:
+        """Fill uncaptured character gaps between extracted AST spans.
+
+        Args:
+            spans: List of extracted non-contiguous AST spans.
+            total: Total character length of the file content.
+
+        Returns:
+            List of complete spans filling gaps between AST statements.
+        """
         if not spans:
             return [(0, total)] if total > 0 else []
         filled: List[Span] = []

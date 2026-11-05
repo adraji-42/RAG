@@ -1,3 +1,5 @@
+"""CLI command evaluating student search results against ground truth."""
+
 import sys
 from typing import Dict, Optional
 
@@ -8,10 +10,17 @@ from ..models import AnsweredQuestion, RagDataset, StudentSearchResults
 
 
 class EvaluateCommand(BaseCommand):
+    """Evaluate student retrieval results against ground-truth dataset."""
 
     def __print_eval_report(
         self, scores: Dict[int, float], count: int
     ) -> None:
+        """Print formatted recall scores table for evaluated questions.
+
+        Args:
+            scores: Dictionary mapping k cutoff integers to recall scores.
+            count: Total number of evaluated answered questions.
+        """
         print("Student data is valid: True")
         print("Evaluation Results")
         print("=" * 40)
@@ -23,6 +32,12 @@ class EvaluateCommand(BaseCommand):
     def cmd(
         self, student_search_results_path: str, dataset_path: str
     ) -> None:
+        """Evaluate student results against ground truth and print report.
+
+        Args:
+            student_search_results_path: Path to student search results JSON.
+            dataset_path: Path to ground-truth evaluation dataset JSON file.
+        """
         try:
             student_results: Optional[StudentSearchResults] = (
                 CliIO.load_student_results(student_search_results_path)

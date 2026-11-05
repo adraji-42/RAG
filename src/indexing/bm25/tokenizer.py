@@ -1,3 +1,5 @@
+"""Code-aware lexical tokenizer splitting identifiers and natural text."""
+
 import re
 from typing import List, Pattern, cast
 
@@ -10,9 +12,18 @@ _SPLIT_RE: Pattern[str] = re.compile(r"[-_ .:/]+")
 
 
 class Tokenizer:
+    """Lexical tokenizer splitting identifiers into full and sub-tokens."""
 
     @staticmethod
     def tokenize(text: str) -> List[str]:
+        """Tokenize code identifiers into decomposed lower-case terms.
+
+        Args:
+            text: Input string to tokenize.
+
+        Returns:
+            List of extracted lower-case tokens and sub-tokens.
+        """
         result: List[str] = []
 
         for raw in cast(List[str], _TOKEN_RE.findall(text)):

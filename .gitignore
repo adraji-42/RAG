@@ -1,8 +1,8 @@
-__pycache__/
-.venv/
-.mypy_cache/
 PROMPT.md
 chunk_test_report.txt
 data/processed/
 data/output/
-moulinette
+moulinette*
+evaluations
+exams/
+data/datasets/

@@ -1,3 +1,5 @@
+"""BM25 indexing and lexical tokenization package."""
+
 from typing import List
 
 from .index import BM25Index

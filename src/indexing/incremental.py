@@ -1,3 +1,5 @@
+"""Incremental corpus indexer detecting file modifications via manifest."""
+
 import os
 from typing import Dict, List, Optional, Tuple
 
@@ -12,11 +14,19 @@ from .embeddings import EmbeddingModel, VectorIndex
 
 
 class IncrementalIndexer:
+    """Incrementally index corpus files by detecting content changes."""
+
     def __init__(
         self,
         pipeline: ChunkingPipeline,
         storage: IndexStorage,
     ) -> None:
+        """Initialize the incremental indexer with pipeline and storage.
+
+        Args:
+            pipeline: ChunkingPipeline for discovering and chunking files.
+            storage: IndexStorage instance for loading and saving artifacts.
+        """
         self.__pipeline: ChunkingPipeline = pipeline
         self.__storage: IndexStorage = storage
 
@@ -27,6 +37,14 @@ class IncrementalIndexer:
         Dict[str, List[ChunkRecord]],
         Dict[str, List[np.ndarray]],
     ]:
+        """Load existing manifest, chunk records, and optional embeddings.
+
+        Args:
+            with_embed: Whether to load existing embedding vectors.
+
+        Returns:
+            Tuple of (manifest_dict, chunks_by_file, embeddings_by_file).
+        """
         manifest: Dict[str, ManifestRecord] = self.__storage.load_manifest()
         chunks: List[ChunkRecord] = self.__storage.load_chunks()
         grp_c: Dict[str, List[ChunkRecord]] = {}
@@ -51,6 +69,14 @@ class IncrementalIndexer:
         vector_index: Optional[VectorIndex],
         changed: bool,
     ) -> None:
+        """Persist chunk records, manifest, and vector index to disk.
+
+        Args:
+            chunks: Complete list of all indexed chunk records.
+            manifest: Updated manifest mapping file paths to records.
+            vector_index: Optional VectorIndex if embeddings were built.
+            changed: Whether any files were added, modified, or deleted.
+        """
         if changed:
             self.__storage.save_artifacts(chunks, manifest, vector_index)
         else:
@@ -59,6 +85,13 @@ class IncrementalIndexer:
     def __print_summary(
         self, counts: Dict[str, int], deleted: int, total: int
     ) -> None:
+        """Print summary statistics for completed incremental indexing run.
+
+        Args:
+            counts: Dictionary of file status counts.
+            deleted: Count of deleted files.
+            total: Total number of chunks indexed.
+        """
         print(
             f"Incremental stats: +{counts['added']} added, "
             f"~{counts['modified']} modified, -{deleted} deleted, "
@@ -72,6 +105,14 @@ class IncrementalIndexer:
     def __build_embeddings(
         self, emb_list: List[np.ndarray]
     ) -> VectorIndex:
+        """Stack computed embedding arrays into a unified vector index.
+
+        Args:
+            emb_list: List of 2D numpy arrays of chunk embeddings.
+
+        Returns:
+            Constructed VectorIndex instance.
+        """
         if emb_list:
             return VectorIndex(np.vstack(emb_list).astype(np.float32))
         return VectorIndex(np.empty((0, 384), dtype=np.float32))
@@ -88,6 +129,20 @@ class IncrementalIndexer:
     ) -> Tuple[
         List[ChunkRecord], Optional[np.ndarray], Optional[EmbeddingModel]
     ]:
+        """Chunk and optionally embed an individual corpus file if modified.
+
+        Args:
+            fp: File path of the document to process.
+            old_grp: Existing chunk records grouped by file path.
+            old_embs: Existing embeddings grouped by file path.
+            bld: ManifestBuilder instance for status checking.
+            counts: Counter dictionary for file status tracking.
+            model: Optional EmbeddingModel instance.
+            with_embed: Whether to compute embeddings for modified files.
+
+        Returns:
+            Tuple of (chunk_records, optional_embeddings, embedding_model).
+        """
         c_chk: List[ChunkRecord] = old_grp.get(fp, [])
         c_emb: List[np.ndarray] = old_embs.get(fp, [])
         status: str = bld.check_status(fp)
@@ -105,6 +160,11 @@ class IncrementalIndexer:
         return nc, model.encode([c["text"] for c in nc]), model
 
     def run(self, embed: bool = False) -> None:
+        """Execute incremental indexing workflow across discovered files.
+
+        Args:
+            embed: Whether to force generation of dense vector embeddings.
+        """
         with_embed: bool = embed or self.__storage.has_embeddings()
         old_man, old_grp, old_embs = self.__load_state(with_embed)
         bld: ManifestBuilder = ManifestBuilder(old_man)

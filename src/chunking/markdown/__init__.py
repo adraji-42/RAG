@@ -1,3 +1,5 @@
+"""Markdown chunking package."""
+
 from typing import List
 
 from .chunker import MarkdownChunker

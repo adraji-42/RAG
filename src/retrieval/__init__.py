@@ -1,3 +1,5 @@
+"""Retrieval package combining lexical, semantic, and hybrid search."""
+
 from typing import List
 
 from .cache import QueryCache

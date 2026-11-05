@@ -1,3 +1,5 @@
+"""Chunking package exporting line mapping and document chunkers."""
+
 from typing import List
 
 from .line_map import LineMap

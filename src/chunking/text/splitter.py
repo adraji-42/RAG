@@ -1,3 +1,5 @@
+"""Recursive hierarchical text splitter for paragraphs, sentences, lines."""
+
 import re
 from typing import List
 
@@ -8,13 +10,29 @@ _SENTENCE_END = re.compile(r"[.?!]\s+")
 
 
 class RecursiveTextSplitter:
+    """Split text blocks hierarchically by paragraphs, sentences, and lines."""
 
     def __init__(self, max_chunk_size: int = 2000) -> None:
+        """Initialize the recursive splitter with a maximum chunk size.
+
+        Args:
+            max_chunk_size: Maximum allowed characters per chunk.
+        """
         self.__max: int = max_chunk_size
 
     def split_block(
         self, content: str, start: int, end: int,
     ) -> List[Span]:
+        """Recursively split a text block into spans within max chunk size.
+
+        Args:
+            content: Document text content string.
+            start: Start character index in content.
+            end: End character index in content.
+
+        Returns:
+            List of character span tuples fitting max chunk size.
+        """
         if end - start <= self.__max:
             return [(start, end)]
         spans: List[Span] = []
@@ -32,6 +50,16 @@ class RecursiveTextSplitter:
     def __split_paragraphs(
         self, text: str, start: int, end: int,
     ) -> List[Span]:
+        """Split text into paragraph spans delimited by blank lines.
+
+        Args:
+            text: Document text string.
+            start: Region start character offset.
+            end: Region end character offset.
+
+        Returns:
+            List of character span tuples split along paragraph breaks.
+        """
         matches = list(_PARAGRAPH_SPLIT.finditer(text, start, end))
         if not matches:
             return [(start, end)]
@@ -49,6 +77,16 @@ class RecursiveTextSplitter:
     def __split_sentences(
         self, text: str, start: int, end: int,
     ) -> List[Span]:
+        """Split text into sentence spans delimited by terminal punctuation.
+
+        Args:
+            text: Document text string.
+            start: Region start character offset.
+            end: Region end character offset.
+
+        Returns:
+            List of character span tuples split along sentence ends.
+        """
         spans: List[Span] = []
         pos: int = start
         for m in _SENTENCE_END.finditer(text, start, end):
@@ -62,6 +100,16 @@ class RecursiveTextSplitter:
     def split_lines(
         self, content: str, start: int, end: int,
     ) -> List[Span]:
+        """Split text into individual line spans.
+
+        Args:
+            content: Document text string.
+            start: Region start character offset.
+            end: Region end character offset.
+
+        Returns:
+            List of character span tuples for individual lines.
+        """
         pos: int = start
         spans: List[Span] = []
         for line in content[start:end].split("\n"):

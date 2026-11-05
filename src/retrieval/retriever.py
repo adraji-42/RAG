@@ -1,3 +1,5 @@
+"""Lexical BM25 retriever querying precomputed disk-backed indices."""
+
 from typing import List, Optional, Tuple
 
 from .cache import QueryCache
@@ -9,13 +11,25 @@ from ..indexing.storage import IndexStorage
 
 
 class BM25Retriever(BaseRetriever):
+    """Lexical retriever querying disk-serialized BM25 indices."""
+
     def __init__(self, processed_dir: str = "data/processed") -> None:
+        """Initialize the BM25 retriever with storage path and query cache.
+
+        Args:
+            processed_dir: Path to directory containing index artifacts.
+        """
         self.__storage: IndexStorage = IndexStorage(processed_dir)
         self.__cache: QueryCache = QueryCache(processed_dir)
         self.__chunks: Optional[List[ChunkRecord]] = None
         self.__bm25: Optional[BM25Index] = None
 
     def __ensure_loaded(self) -> None:
+        """Load chunks and BM25 index from storage if not already loaded.
+
+        Raises:
+            FileNotFoundError: If index is not found in storage.
+        """
         if not self.__storage.has_index():
             raise FileNotFoundError(
                 f"Index not found in '{self.__storage.processed_dir}'. "
@@ -27,6 +41,18 @@ class BM25Retriever(BaseRetriever):
             self.__bm25 = self.__storage.load_bm25()
 
     def retrieve(self, query: str, k: int = 5) -> List[MinimalSource]:
+        """Retrieve top-k sources matching query using BM25 lexical ranking.
+
+        Args:
+            query: Search query text string.
+            k: Maximum number of sources to return.
+
+        Returns:
+            List of retrieved MinimalSource objects.
+
+        Raises:
+            ValueError: If k <= 0 or query is empty or whitespace.
+        """
         if k <= 0 or not query.strip():
             raise ValueError(
                 "k must be greater than 0, "

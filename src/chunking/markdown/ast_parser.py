@@ -1,3 +1,5 @@
+"""Markdown token stream AST parser extracting headings and blocks."""
+
 from typing import List, Tuple
 
 from markdown_it.token import Token
@@ -13,13 +15,27 @@ HEADING_TYPE: str = "heading_open"
 
 
 class MarkdownAstParser:
+    """Parse markdown token streams into headings and block spans."""
 
     def __init__(self, lmap: LineMap) -> None:
+        """Initialize the parser with a line-to-offset map.
+
+        Args:
+            lmap: LineMap instance for character offset conversions.
+        """
         self.__lmap: LineMap = lmap
 
     def extract_headings(
         self, tokens: List[Token],
     ) -> List[Tuple[int, int]]:
+        """Extract heading levels and offsets from markdown tokens.
+
+        Args:
+            tokens: List of markdown-it parser tokens.
+
+        Returns:
+            List of (heading_level, character_offset) tuples.
+        """
         result: List[Tuple[int, int]] = []
         for tok in tokens:
             if tok.type == HEADING_TYPE and tok.map:
@@ -33,6 +49,14 @@ class MarkdownAstParser:
     def extract_blocks(
         self, tokens: List[Token],
     ) -> List[Tuple[str, Span]]:
+        """Extract sanitized code and table block spans from tokens.
+
+        Args:
+            tokens: List of markdown-it parser tokens.
+
+        Returns:
+            List of sanitized (block_type, (start, end)) tuples.
+        """
         found: List[Tuple[str, Span]] = []
         for tok in tokens:
             if not tok.map:
@@ -48,6 +72,14 @@ class MarkdownAstParser:
     def __sanitize(
         self, blocks: List[Tuple[str, Span]],
     ) -> List[Tuple[str, Span]]:
+        """Sort and filter overlapping extracted block spans.
+
+        Args:
+            blocks: List of raw block tuples.
+
+        Returns:
+            List of sorted non-overlapping block tuples.
+        """
         ordered: List[Tuple[str, Span]] = sorted(
             blocks, key=lambda item: item[1][0],
         )

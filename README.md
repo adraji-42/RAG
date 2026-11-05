@@ -37,11 +37,17 @@ make install
 
 #### A. Indexing
 ```bash
-# Incremental indexing (default: raw_dir=data/raw, max_chunk_size=2000)
+# Fast lexical indexing: BM25 + chunks + manifest only (incremental)
 uv run python -m src index
+
+# Build dense vector embeddings as well (required for --mode hybrid)
+uv run python -m src index --embed
 
 # Force a full re-index from scratch
 uv run python -m src index --force
+
+# Force a full re-index from scratch with embeddings
+uv run python -m src index --force --embed
 ```
 
 #### B. Search & Dataset Search
@@ -271,6 +277,15 @@ Evaluated on public and private datasets over `vllm-0.10.1` (1,965 files, 14,079
    * **CLI & API Layer (`cli/`, `api/`):** Catch exceptions and print clear messages to `sys.stderr` (or return `HTTP 400 Bad Request` in FastAPI) so the program never crashes with raw tracebacks.
 3. **Strict Code Quality:**
    * All 52 Python files enforce OOP encapsulation, functions $\le 30$ lines, sorted imports, and zero `flake8` or `mypy --strict` errors.
+
+---
+
+## Challenges Faced
+
+* **Code Identifier Mismatch in Lexical Search (`CamelCase` / `snake_case`):** Standard regex tokenizers either keep `AsyncLLMEngine` intact (missing natural-language queries like `"async llm engine"`) or split it destructively (losing exact identifier matches). Solved via a dual-emission `Tokenizer` (`src/indexing/bm25/tokenizer.py`) that emits both the lowered full identifier and its decomposed sub-tokens, with a `raw.islower() and raw.isalpha()` fast-path.
+* **Preserving Syntactic & Structural Integrity Under `max_chunk_size = 2000`:** Naive fixed-size character slicing breaks Python functions and Markdown tables mid-block. Solved using AST-guided span extraction (`ast.parse` in `PythonChunker` with `__fill_gaps`, and `markdown-it-py` in `MarkdownChunker` with `BlockIsolator`) combined with `Emitter` greedy span packing and backward newline/space boundary splitting.
+* **Indexing Speed vs. CPU Embedding Overhead:** Computing 384-d embeddings for 14,079 chunks on a CPU-only machine takes minutes, whereas BM25 indexing takes <5 seconds. Solved by decoupling embedding generation behind `--embed`, using `torch.bfloat16` under `torch.inference_mode()`, and implementing two-stage incremental indexing (`mtime` + `SHA-256`) with `zip(chunks, embs, strict=True)`.
+* **CPU Latency & Reasoning Token Exhaustion on `Qwen/Qwen3-0.6B`:** By default, `Qwen3-0.6B` generates long `<think>...</think>` blocks that consume the `max_new_tokens = 300` budget on CPU before outputting the final answer. Solved by passing `enable_thinking=False` to `apply_chat_template` (with a `TypeError` fallback for alternative models) and stripping residual `<think>` tags in `PromptBuilder`.
 
 ---
 

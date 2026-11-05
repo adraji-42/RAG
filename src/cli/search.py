@@ -1,3 +1,5 @@
+"""CLI search commands for single queries and batch evaluation datasets."""
+
 import sys
 from pathlib import Path
 from typing import List, Optional
@@ -16,6 +18,8 @@ from ..retrieval import BaseRetriever
 
 
 class SearchCommand(BaseCommand):
+    """Execute CLI query search across indexed documents."""
+
     def cmd(
         self,
         query: str,
@@ -23,6 +27,14 @@ class SearchCommand(BaseCommand):
         processed_dir: str = "data/processed",
         mode: str = "bm25",
     ) -> None:
+        """Retrieve and print matching sources for a single query.
+
+        Args:
+            query: Query question text string.
+            k: Maximum number of source spans to retrieve.
+            processed_dir: Path to directory containing index files.
+            mode: Retrieval strategy mode ('bm25' or 'hybrid').
+        """
         try:
             retriever: BaseRetriever = self.get_retriever(mode, processed_dir)
             sources: List[MinimalSource] = retriever.retrieve(query, k)
@@ -34,9 +46,22 @@ class SearchCommand(BaseCommand):
 
 
 class SearchDatasetCommand(BaseCommand):
+    """Execute batch dataset query retrieval and save results."""
+
     def __search_queries(
         self, dataset: RagDataset, k: int, processed_dir: str, mode: str
     ) -> List[MinimalSearchResults]:
+        """Retrieve sources for all questions in the dataset.
+
+        Args:
+            dataset: RagDataset containing questions to evaluate.
+            k: Maximum number of source spans to retrieve per question.
+            processed_dir: Path to directory containing index files.
+            mode: Retrieval strategy mode ('bm25' or 'hybrid').
+
+        Returns:
+            List of MinimalSearchResults with retrieved sources.
+        """
         retriever: BaseRetriever = self.get_retriever(mode, processed_dir)
         results: List[MinimalSearchResults] = []
         for item in tqdm(
@@ -69,6 +94,15 @@ class SearchDatasetCommand(BaseCommand):
         processed_dir: str = "data/processed",
         mode: str = "bm25",
     ) -> None:
+        """Load dataset, execute batch query search, and save results.
+
+        Args:
+            dataset_path: Path to dataset JSON file.
+            k: Maximum number of source spans to retrieve per question.
+            save_directory: Directory where output JSON will be saved.
+            processed_dir: Path to directory containing index files.
+            mode: Retrieval strategy mode ('bm25' or 'hybrid').
+        """
         try:
             if k <= 0:
                 raise ValueError("k must be greater than 0")

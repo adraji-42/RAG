@@ -1,3 +1,5 @@
+"""Autoregressive language model generator with chat templates and caching."""
+
 import hashlib
 from typing import Any, Dict, List, Optional, cast
 
@@ -10,6 +12,7 @@ from ..retrieval.cache import QueryCache
 
 
 class AnswerGenerator:
+    """Generate grounded answers using an autoregressive language model."""
 
     def __init__(
         self,
@@ -17,6 +20,13 @@ class AnswerGenerator:
         max_new_tokens: int = 300,
         processed_dir: str = "data/processed",
     ) -> None:
+        """Initialize the answer generator with model name and token limits.
+
+        Args:
+            model_name: Pretrained causal language model name or path.
+            max_new_tokens: Maximum number of new tokens to generate.
+            processed_dir: Path to directory containing answer cache.
+        """
         self.__model_name: str = model_name
         self.__max_new_tokens: int = max_new_tokens
         self.__cache: QueryCache = QueryCache(processed_dir)
@@ -24,6 +34,7 @@ class AnswerGenerator:
         self.__model: Any = None
 
     def __ensure_loaded(self) -> None:
+        """Load model weights and tokenizer in bfloat16 evaluation mode."""
         if self.__tokenizer is not None:
             return
         self.__tokenizer = AutoTokenizer.from_pretrained(self.__model_name)
@@ -35,6 +46,14 @@ class AnswerGenerator:
         cast(torch.nn.Module, self.__model).eval()
 
     def __apply_template(self, messages: List[Any]) -> str:
+        """Render chat prompt template without thinking blocks.
+
+        Args:
+            messages: List of chat message dictionaries.
+
+        Returns:
+            Formatted prompt text string for generation.
+        """
         tok: Any = self.__tokenizer
         kwargs: Dict[str, bool] = {
             "tokenize": False,
@@ -49,6 +68,14 @@ class AnswerGenerator:
         return cast(str, res)
 
     def __run_model(self, prompt: str) -> str:
+        """Generate tokens greedily using loaded causal language model.
+
+        Args:
+            prompt: Formatted prompt text string.
+
+        Returns:
+            Decoded generated answer string.
+        """
         tok: Any = self.__tokenizer
         mdl: Any = self.__model
         inputs = tok(prompt, return_tensors="pt")
@@ -69,6 +96,15 @@ class AnswerGenerator:
     def __build_cache_key(
         self, question: str, sources: List[MinimalSource]
     ) -> str:
+        """Compute SHA-256 hash from question and retrieved source bounds.
+
+        Args:
+            question: Query question string.
+            sources: List of retrieved MinimalSource objects.
+
+        Returns:
+            SHA-256 hexadecimal cache key string.
+        """
         parts: List[str] = [question.strip()]
         for s in sources:
             parts.append(
@@ -78,6 +114,15 @@ class AnswerGenerator:
         return hashlib.sha256("\n".join(parts).encode()).hexdigest()
 
     def generate(self, question: str, sources: List[MinimalSource]) -> str:
+        """Generate answer from retrieved sources or return cached result.
+
+        Args:
+            question: Query question string.
+            sources: List of retrieved MinimalSource objects.
+
+        Returns:
+            Generated or cached answer text string.
+        """
         if not question.strip() or not sources:
             return "Insufficient context to answer the question."
         cache_key: str = self.__build_cache_key(question, sources)

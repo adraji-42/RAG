@@ -1,3 +1,5 @@
+"""Hybrid retriever fusing BM25 lexical search and dense vector search."""
+
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple
 
@@ -13,7 +15,14 @@ from ..indexing.embeddings import EmbeddingModel, VectorIndex
 
 
 class HybridRetriever(BaseRetriever):
+    """Hybrid retriever fusing lexical BM25 and semantic vector search."""
+
     def __init__(self, processed_dir: str = "data/processed") -> None:
+        """Initialize hybrid retriever with lazy-loaded indices and cache.
+
+        Args:
+            processed_dir: Path to directory containing index artifacts.
+        """
         self.__storage: IndexStorage = IndexStorage(processed_dir)
         self.__cache: QueryCache = QueryCache(processed_dir)
         self.__chunks: Optional[List[ChunkRecord]] = None
@@ -22,6 +31,11 @@ class HybridRetriever(BaseRetriever):
         self.__model: Optional[EmbeddingModel] = None
 
     def __ensure_loaded(self) -> None:
+        """Load chunks, BM25, embeddings, and model from storage.
+
+        Raises:
+            FileNotFoundError: If index or embeddings not found in storage.
+        """
         if not self.__storage.has_index():
             raise FileNotFoundError(
                 f"Index not found in '{self.__storage.processed_dir}'. "
@@ -48,6 +62,17 @@ class HybridRetriever(BaseRetriever):
         k: int,
         rrf_k: float = 60.0,
     ) -> List[int]:
+        """Combine lexical and semantic rankings using RRF.
+
+        Args:
+            lexical: List of (doc_index, score) from BM25 search.
+            semantic: List of (doc_index, score) from vector search.
+            k: Maximum number of combined indices to return.
+            rrf_k: Reciprocal Rank Fusion smoothing parameter.
+
+        Returns:
+            List of fused document indices ranked by combined RRF score.
+        """
         scores: Dict[int, float] = defaultdict(float)
         for rank, (idx, _) in enumerate(lexical, 1):
             scores[idx] += 1.0 / (rrf_k + rank)
@@ -57,6 +82,18 @@ class HybridRetriever(BaseRetriever):
         return [idx for idx, _ in ranked]
 
     def retrieve(self, query: str, k: int = 5) -> List[MinimalSource]:
+        """Retrieve top-k sources combining BM25 and vector similarities.
+
+        Args:
+            query: Search query text string.
+            k: Maximum number of sources to return.
+
+        Returns:
+            List of retrieved MinimalSource objects.
+
+        Raises:
+            ValueError: If k <= 0 or query is empty or whitespace.
+        """
         if k <= 0 or not query.strip():
             raise ValueError(
                 "k must be greater than 0, "
