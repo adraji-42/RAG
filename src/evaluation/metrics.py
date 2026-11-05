@@ -1,3 +1,5 @@
+"""Evaluation metrics computing character-level IoU and Recall@k."""
+
 from typing import Dict, List
 
 from ..models import (
@@ -9,12 +11,29 @@ from ..models import (
 
 
 class Evaluator:
+    """Evaluate retrieval recall based on character-level IoU matching."""
 
     def __init__(self, min_iou: float = 0.05) -> None:
+        """Initialize evaluator with minimum IoU threshold for matching.
+
+        Args:
+            min_iou: Minimum character IoU threshold for matching.
+        """
         self.__min_iou: float = min_iou
 
     @staticmethod
     def compute_iou(s1: int, e1: int, s2: int, e2: int) -> float:
+        """Compute character span Intersection over Union.
+
+        Args:
+            s1: Start character offset of first span.
+            e1: End character offset of first span.
+            s2: Start character offset of second span.
+            e2: End character offset of second span.
+
+        Returns:
+            Intersection over Union float score in range [0.0, 1.0].
+        """
         inter: int = max(0, min(e1, e2) - max(s1, s2))
         if inter == 0:
             return 0.0
@@ -27,6 +46,16 @@ class Evaluator:
         ground_truth: MinimalSource,
         min_iou: float = 0.05,
     ) -> bool:
+        """Check if source matches ground truth above IoU threshold.
+
+        Args:
+            retrieved: Retrieved MinimalSource candidate.
+            ground_truth: Reference ground-truth MinimalSource.
+            min_iou: Minimum IoU threshold required for a match.
+
+        Returns:
+            True if spans belong to same file and meet IoU threshold.
+        """
         if retrieved.file_path != ground_truth.file_path:
             return False
         return (
@@ -44,6 +73,15 @@ class Evaluator:
         gt_sources: List[MinimalSource],
         retrieved: List[MinimalSource],
     ) -> float:
+        """Compute fraction of ground-truth sources found in retrieved list.
+
+        Args:
+            gt_sources: Ground-truth source spans for a question.
+            retrieved: List of candidate retrieved source spans.
+
+        Returns:
+            Recall fraction score in range [0.0, 1.0].
+        """
         if not gt_sources:
             return 0.0
         found: int = sum(
@@ -59,6 +97,16 @@ class Evaluator:
         gt_map: Dict[str, AnsweredQuestion],
         student_map: Dict[str, List[MinimalSource]],
     ) -> float:
+        """Calculate mean recall across all questions at cutoff k.
+
+        Args:
+            k: Maximum retrieval depth cutoff.
+            gt_map: Map of question IDs to ground-truth questions.
+            student_map: Map of question IDs to retrieved source lists.
+
+        Returns:
+            Average recall score across all evaluated questions.
+        """
         total: float = sum(
             self.__recall_for_question(
                 gt_q.sources, student_map.get(qid, [])[:k]
@@ -73,6 +121,16 @@ class Evaluator:
         ground_truth: RagDataset,
         k_values: List[int] = [1, 3, 5, 10],
     ) -> Dict[int, float]:
+        """Evaluate mean recall scores across dataset for k cutoffs.
+
+        Args:
+            student_results: Student search results for evaluation.
+            ground_truth: Ground-truth dataset with reference sources.
+            k_values: List of k cutoffs to calculate recall for.
+
+        Returns:
+            Dictionary mapping each k cutoff to its mean recall score.
+        """
         gt_map: Dict[str, AnsweredQuestion] = {
             q.question_id: q
             for q in ground_truth.rag_questions

@@ -1,3 +1,5 @@
+"""Indexing package managing BM25, embeddings, and incremental indices."""
+
 from typing import List
 
 from .bm25 import BM25Index

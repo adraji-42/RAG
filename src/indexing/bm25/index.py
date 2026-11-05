@@ -1,3 +1,5 @@
+"""BM25 inverted index implementation with Robertson-Spärck Jones IDF."""
+
 import math
 import heapq
 from typing import Dict, List, Tuple
@@ -7,10 +9,18 @@ from .tokenizer import Tokenizer
 
 
 class BM25Index:
+    """Inverted BM25 index scoring documents against lexical queries."""
 
     def __init__(
         self, corpus: List[str], *, k1: float = 1.5, b: float = 0.75
     ) -> None:
+        """Initialize BM25 index with inverted index and Robertson IDF.
+
+        Args:
+            corpus: List of document text strings.
+            k1: Term frequency saturation tuning parameter.
+            b: Document length normalization tuning parameter.
+        """
         self.__doc_lengths: List[int] = []
         self.__inverted_index: Dict[str, Dict[int, int]] = defaultdict(dict)
         for doc_idx, doc in enumerate(corpus):
@@ -39,13 +49,31 @@ class BM25Index:
 
     @property
     def corpus_size(self) -> int:
+        """Return the total number of indexed documents.
+
+        Returns:
+            Total number of indexed documents in the corpus.
+        """
         return len(self.__doc_lengths)
 
     @property
     def avg_doc_len(self) -> float:
+        """Return the average token length of indexed documents.
+
+        Returns:
+            Average token length across all indexed documents.
+        """
         return self.__avg_doc_len
 
     def get_scores(self, query: str) -> List[float]:
+        """Compute BM25 relevance scores for all documents given a query.
+
+        Args:
+            query: Search query text string.
+
+        Returns:
+            List of BM25 relevance scores for all documents in the corpus.
+        """
         scores: List[float] = [0.0] * len(self.__doc_lengths)
         for token in set(Tokenizer.tokenize(query)):
             if token not in self.__idf:
@@ -65,6 +93,15 @@ class BM25Index:
     def search(
         self, query: str, k: int = 5
     ) -> List[Tuple[int, float]]:
+        """Retrieve top-k document indices and scores matching the query.
+
+        Args:
+            query: Search query text string.
+            k: Maximum number of top results to return.
+
+        Returns:
+            List of (document_index, score) tuples ordered by relevance.
+        """
         if k <= 0:
             return []
         candidates: List[Tuple[int, float]] = [

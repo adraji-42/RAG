@@ -1,3 +1,5 @@
+"""Python syntax-aware chunking package."""
+
 from typing import List
 
 from .chunker import PythonChunker

@@ -1,3 +1,5 @@
+"""CLI input/output helpers for reading and persisting JSON datasets."""
+
 import os
 from sys import stderr
 from typing import Optional
@@ -8,9 +10,18 @@ from ..models import RagDataset, StudentSearchResults
 
 
 class CliIO:
+    """Handle JSON dataset loading, validation, and serialization for CLI."""
 
     @staticmethod
     def load_dataset(path: str) -> Optional[RagDataset]:
+        """Load and validate a RAG dataset JSON file.
+
+        Args:
+            path: Path to dataset JSON file.
+
+        Returns:
+            Validated RagDataset instance or None on error.
+        """
         try:
             with open(path, "r", encoding="utf-8") as f:
                 return RagDataset.model_validate_json(f.read())
@@ -22,6 +33,14 @@ class CliIO:
 
     @staticmethod
     def load_student_results(path: str) -> Optional[StudentSearchResults]:
+        """Load and validate student search results JSON file.
+
+        Args:
+            path: Path to student search results JSON file.
+
+        Returns:
+            Validated StudentSearchResults instance or None on error.
+        """
         if not os.path.isfile(path):
             print(f"File not found: {path}", file=stderr)
             return None
@@ -37,6 +56,14 @@ class CliIO:
 
     @staticmethod
     def load_eval_dataset(path: str) -> Optional[RagDataset]:
+        """Load and validate a ground-truth evaluation dataset JSON file.
+
+        Args:
+            path: Path to evaluation dataset JSON file.
+
+        Returns:
+            Validated RagDataset instance or None on error.
+        """
         if not os.path.isfile(path):
             print(f"File not found: {path}", file=stderr)
             return None
@@ -56,6 +83,14 @@ class CliIO:
         filename: str,
         message_prefix: str,
     ) -> None:
+        """Save a Pydantic model serialized as formatted JSON to disk.
+
+        Args:
+            model: Pydantic model instance to serialize.
+            save_dir: Destination directory path.
+            filename: Output file name.
+            message_prefix: Log message descriptor prefix.
+        """
         os.makedirs(save_dir, exist_ok=True)
         out_path: str = os.path.join(save_dir, filename)
         try:
