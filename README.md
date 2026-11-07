@@ -250,12 +250,12 @@ $$
 
 Evaluated on public and private datasets over `vllm-0.10.1` (1,965 files, 14,079 chunks):
 
-| Dataset | Questions | Recall@1 | Recall@3 | Recall@5 | Recall@10 | Speed |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| `dataset_docs_public.json` | 100 | **61.0%** | **77.0%** | **79.0%–80.0%** | **85.0%** | **135 q/s** |
-| `dataset_docs_private.json` | 100 | **61.0%** | **76.0%** | **81.0%** | **86.0%** | **135 q/s** |
-| `dataset_code_public.json` | 99 | **40.4%–45.8%** | **54.5%** | **61.6%–66.7%** | **72.7%** | **106 q/s** |
-| `dataset_code_private.json` | 100 | **39.0%** | **54.0%** | **59.0%–63.0%** | **66.0%** | **106 q/s** |
+| Dataset | Questions | Recall@1 | Recall@3 | Recall@5 | Recall@10 |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| `dataset_docs_public.json` | 100 | **60.0%** | **77.0%** | **80.0%** | **85.0%** |
+| `dataset_docs_private.json` | 100 | **61.0%** | **74.0%** | **83.0%** | **86.0%** |
+| `dataset_code_public.json` | 99 | **42.4%** | **59.6%** | **66.7%** | **77.8%** |
+| `dataset_code_private.json` | 100 | **46.0%** | **62.0%** | **64.0%** | **73.0%** |
 
 ### Strengths & Limitations
 * **BM25 vs. Hybrid:** BM25 is strongest on exact class and function names, while Hybrid search helps on conceptual questions where wording differs from the code.
