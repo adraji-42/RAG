@@ -3,9 +3,11 @@
 import sys
 
 import uvicorn
+from pydantic import ValidationError
 
 from .base import BaseCommand
 from ..api import RagApiService
+from .models import ServeOptions
 
 
 class ServeCommand(BaseCommand):
@@ -25,8 +27,15 @@ class ServeCommand(BaseCommand):
             processed_dir: Path to directory containing index files.
         """
         try:
-            service: RagApiService = RagApiService(processed_dir)
-            uvicorn.run(service.app, host=host, port=port)
+            options: ServeOptions = ServeOptions(
+                host=host,
+                port=port,
+                processed_dir=processed_dir,
+            )
+            service: RagApiService = RagApiService(options.processed_dir)
+            uvicorn.run(service.app, host=options.host, port=options.port)
+        except ValidationError as e:
+            print(self.format_validation_error(e), file=sys.stderr)
         except (ValueError, FileNotFoundError, RuntimeError) as e:
             print(f"Error: {e}", file=sys.stderr)
         except Exception as e:

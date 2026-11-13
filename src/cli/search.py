@@ -5,16 +5,18 @@ from pathlib import Path
 from typing import List, Optional
 
 from tqdm import tqdm
+from pydantic import ValidationError
 
 from .io import CliIO
+from .base import BaseCommand
+from ..retrieval import BaseRetriever
+from .models import SearchDatasetOptions, SearchOptions
 from ..models import (
     MinimalSearchResults,
     MinimalSource,
     RagDataset,
     StudentSearchResults,
 )
-from .base import BaseCommand
-from ..retrieval import BaseRetriever
 
 
 class SearchCommand(BaseCommand):
@@ -36,11 +38,23 @@ class SearchCommand(BaseCommand):
             mode: Retrieval strategy mode ('bm25' or 'hybrid').
         """
         try:
-            retriever: BaseRetriever = self.get_retriever(mode, processed_dir)
-            sources: List[MinimalSource] = retriever.retrieve(query, k)
+            options: SearchOptions = SearchOptions(
+                query=query,
+                k=k,
+                processed_dir=processed_dir,
+                mode=mode,
+            )
+            retriever: BaseRetriever = self.get_retriever(
+                options.mode, options.processed_dir
+            )
+            sources: List[MinimalSource] = retriever.retrieve(
+                options.query, options.k
+            )
             for s in sources:
                 p1, p2 = s.first_character_index, s.last_character_index
                 print(f"{s.file_path} [{p1}:{p2}]")
+        except ValidationError as e:
+            print(self.format_validation_error(e), file=sys.stderr)
         except (ValueError, OSError, RuntimeError) as e:
             print(f"Error: {e}", file=sys.stderr)
 
@@ -104,18 +118,30 @@ class SearchDatasetCommand(BaseCommand):
             mode: Retrieval strategy mode ('bm25' or 'hybrid').
         """
         try:
-            if k <= 0:
-                raise ValueError("k must be greater than 0")
-            dataset: Optional[RagDataset] = CliIO.load_dataset(dataset_path)
+            options: SearchDatasetOptions = SearchDatasetOptions(
+                dataset_path=dataset_path,
+                k=k,
+                save_directory=save_directory,
+                processed_dir=processed_dir,
+                mode=mode,
+            )
+            dataset: Optional[RagDataset] = CliIO.load_dataset(
+                options.dataset_path
+            )
             if dataset is None:
                 return
             results: List[MinimalSearchResults] = (
-                self.__search_queries(dataset, k, processed_dir, mode)
+                self.__search_queries(
+                    dataset, options.k, options.processed_dir, options.mode
+                )
             )
             CliIO.save_result_file(
-                StudentSearchResults(search_results=results, k=k),
-                save_directory, Path(dataset_path).name,
+                StudentSearchResults(search_results=results, k=options.k),
+                options.save_directory,
+                Path(options.dataset_path).name,
                 "student_search_results",
             )
+        except ValidationError as e:
+            print(self.format_validation_error(e), file=sys.stderr)
         except (ValueError, OSError, RuntimeError) as e:
             print(f"Error: {e}", file=sys.stderr)

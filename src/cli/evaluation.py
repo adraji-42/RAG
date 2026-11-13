@@ -3,10 +3,17 @@
 import sys
 from typing import Dict, Optional
 
+from pydantic import ValidationError
+
 from .io import CliIO
 from .base import BaseCommand
 from ..evaluation import Evaluator
-from ..models import AnsweredQuestion, RagDataset, StudentSearchResults
+from .models import EvaluateOptions
+from ..models import (
+    AnsweredQuestion,
+    RagDataset,
+    StudentSearchResults,
+)
 
 
 class EvaluateCommand(BaseCommand):
@@ -39,13 +46,17 @@ class EvaluateCommand(BaseCommand):
             dataset_path: Path to ground-truth evaluation dataset JSON file.
         """
         try:
+            options: EvaluateOptions = EvaluateOptions(
+                student_search_results_path=student_search_results_path,
+                dataset_path=dataset_path,
+            )
             student_results: Optional[StudentSearchResults] = (
-                CliIO.load_student_results(student_search_results_path)
+                CliIO.load_student_results(options.student_search_results_path)
             )
             if student_results is None:
                 return
             dataset: Optional[RagDataset] = CliIO.load_eval_dataset(
-                dataset_path
+                options.dataset_path
             )
             if dataset is None:
                 return
@@ -59,6 +70,8 @@ class EvaluateCommand(BaseCommand):
                 if isinstance(q, AnsweredQuestion) and q.sources
             )
             self.__print_eval_report(scores, count)
+        except ValidationError as e:
+            print(self.format_validation_error(e), file=sys.stderr)
         except (ValueError, FileNotFoundError, RuntimeError) as e:
             print(f"Error: {e}", file=sys.stderr)
         except Exception as e:

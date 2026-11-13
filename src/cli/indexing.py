@@ -2,8 +2,11 @@
 
 import sys
 
+from pydantic import ValidationError
+
 from .base import BaseCommand
 from ..indexing import Indexer
+from .models import IndexOptions
 
 
 class IndexCommand(BaseCommand):
@@ -27,11 +30,20 @@ class IndexCommand(BaseCommand):
             embed: Whether to compute dense vector embeddings.
         """
         try:
-            indexer: Indexer = Indexer(
+            options: IndexOptions = IndexOptions(
                 max_chunk_size=max_chunk_size,
                 raw_dir=raw_dir,
                 processed_dir=processed_dir,
+                force=force,
+                embed=embed,
             )
-            indexer.run(force=force, embed=embed)
+            indexer: Indexer = Indexer(
+                options.max_chunk_size,
+                options.raw_dir,
+                options.processed_dir,
+            )
+            indexer.run(force=options.force, embed=options.embed)
+        except ValidationError as e:
+            print(self.format_validation_error(e), file=sys.stderr)
         except (ValueError, OSError, RuntimeError) as e:
             print(f"Error: {e}", file=sys.stderr)

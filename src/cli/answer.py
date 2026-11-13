@@ -5,17 +5,19 @@ from pathlib import Path
 from typing import List, Optional
 
 from tqdm import tqdm
+from pydantic import ValidationError
 
 from .io import CliIO
+from .base import BaseCommand
+from ..retrieval import BaseRetriever
+from ..generation import AnswerGenerator
+from .models import AnswerDatasetOptions, AnswerOptions
 from ..models import (
     MinimalAnswer,
     MinimalSource,
     StudentSearchResults,
     StudentSearchResultsAndAnswer,
 )
-from .base import BaseCommand
-from ..retrieval import BaseRetriever
-from ..generation import AnswerGenerator
 
 
 class AnswerCommand(BaseCommand):
@@ -37,11 +39,25 @@ class AnswerCommand(BaseCommand):
             mode: Retrieval strategy mode ('bm25' or 'hybrid').
         """
         try:
-            retriever: BaseRetriever = self.get_retriever(mode, processed_dir)
-            sources: List[MinimalSource] = retriever.retrieve(query, k=k)
-            gen: AnswerGenerator = AnswerGenerator(processed_dir=processed_dir)
-            ans: str = gen.generate(query, sources)
+            options: AnswerOptions = AnswerOptions(
+                query=query,
+                k=k,
+                processed_dir=processed_dir,
+                mode=mode,
+            )
+            retriever: BaseRetriever = self.get_retriever(
+                options.mode, options.processed_dir
+            )
+            sources: List[MinimalSource] = retriever.retrieve(
+                options.query, k=options.k
+            )
+            gen: AnswerGenerator = AnswerGenerator(
+                processed_dir=options.processed_dir
+            )
+            ans: str = gen.generate(options.query, sources)
             print(f"\nAnswer:\n{ans}")
+        except ValidationError as e:
+            print(self.format_validation_error(e), file=sys.stderr)
         except (ValueError, OSError, RuntimeError) as e:
             print(f"Error: {e}", file=sys.stderr)
 
@@ -91,8 +107,14 @@ class AnswerDatasetCommand(BaseCommand):
             save_directory: Directory path to save output answer file.
         """
         try:
+            options: AnswerDatasetOptions = AnswerDatasetOptions(
+                student_search_results_path=student_search_results_path,
+                save_directory=save_directory,
+            )
             student_results: Optional[StudentSearchResults] = (
-                CliIO.load_student_results(student_search_results_path)
+                CliIO.load_student_results(
+                    options.student_search_results_path
+                )
             )
             if student_results is None:
                 return
@@ -104,9 +126,11 @@ class AnswerDatasetCommand(BaseCommand):
                     search_results=answers,
                     k=student_results.k,
                 ),
-                save_directory,
-                Path(student_search_results_path).name,
+                options.save_directory,
+                Path(options.student_search_results_path).name,
                 "student_search_results_and_answer",
             )
+        except ValidationError as e:
+            print(self.format_validation_error(e), file=sys.stderr)
         except (ValueError, OSError, RuntimeError) as e:
             print(f"Error: {e}", file=sys.stderr)
