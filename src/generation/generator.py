@@ -2,13 +2,13 @@
 
 import hashlib
 from typing import Any, Dict, List, Optional, cast
-
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
-
 from .prompts import PromptBuilder
 from ..models import MinimalSource
 from ..retrieval.cache import QueryCache
+
+_DEFAULT_CONTEXT_WINDOW: int = 32768
 
 
 class AnswerGenerator:
@@ -29,6 +29,10 @@ class AnswerGenerator:
         """
         self.__model_name: str = model_name
         self.__max_new_tokens: int = max_new_tokens
+        context_window = self.__context_window()
+        if context_window - self.__max_new_tokens <= 0:
+            raise ValueError(f"Max new tokens must be less than {context_window * 0.34:.0f}")
+        self.__max_input_tokens: int = context_window - self.__max_new_tokens
         self.__cache: QueryCache = QueryCache(processed_dir)
         self.__tokenizer: Any = None
         self.__model: Any = None
@@ -44,6 +48,21 @@ class AnswerGenerator:
             low_cpu_mem_usage=True,
         )
         cast(torch.nn.Module, self.__model).eval()
+
+    def __context_window(self) -> int:
+        """Resolve dynamic context window size from loaded model config.
+
+        Returns:
+            Maximum context window size in tokens supported by the model.
+        """
+        cfg: Any = getattr(self.__model, "config", None)
+        cfg_limit: int = int(
+            getattr(cfg, "max_position_embeddings", 0)
+            or getattr(cfg, "max_sequence_length", 0)
+            or getattr(cfg, "seq_length", 0)
+        )
+        tok_limit: int = int(getattr(self.__tokenizer, "model_max_length", 0))
+        return _DEFAULT_CONTEXT_WINDOW if (m := min(cfg_limit, tok_limit)) == 0 else m
 
     def __apply_template(self, messages: List[Any]) -> str:
         """Render chat prompt template without thinking blocks.
@@ -78,7 +97,13 @@ class AnswerGenerator:
         """
         tok: Any = self.__tokenizer
         mdl: Any = self.__model
-        inputs = tok(prompt, return_tensors="pt")
+        max_in: int = self.__max_input_tokens
+        inputs = tok(
+            prompt,
+            return_tensors="pt",
+            truncation=True,
+            max_length=max_in,
+        )
         input_len: int = inputs["input_ids"].shape[1]
         with torch.inference_mode():
             output_ids: torch.Tensor = cast(
@@ -130,7 +155,12 @@ class AnswerGenerator:
         if cached is not None:
             return cached
         self.__ensure_loaded()
-        messages = PromptBuilder.build_messages(question, sources)
+        messages = PromptBuilder.build_messages(
+            question,
+            sources,
+            tokenizer=self.__tokenizer,
+            max_input_tokens=self.__max_input_tokens,
+        )
         prompt: str = self.__apply_template(messages)
         raw: str = self.__run_model(prompt)
         answer: str = PromptBuilder.strip_thinking(raw)

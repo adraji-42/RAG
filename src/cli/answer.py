@@ -11,7 +11,7 @@ from .io import CliIO
 from .base import BaseCommand
 from ..retrieval import BaseRetriever
 from ..generation import AnswerGenerator
-from .models import AnswerDatasetOptions, AnswerOptions
+from .models import AnswerDatasetOptions, AnswerOptions, RetrievalMode
 from ..models import (
     MinimalAnswer,
     MinimalSource,
@@ -28,7 +28,7 @@ class AnswerCommand(BaseCommand):
         query: str,
         k: int = 5,
         processed_dir: str = "data/processed",
-        mode: str = "bm25",
+        mode: RetrievalMode = "bm25",
     ) -> None:
         """Retrieve sources and generate an answer for a single query.
 

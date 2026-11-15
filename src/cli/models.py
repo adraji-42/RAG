@@ -1,9 +1,19 @@
-from typing import Any
+"""Pydantic configuration and validation models for CLI commands.""""""Pydantic configuration and validation models for CLI commands."""
 
-from pydantic import BaseModel, Field, field_validator
+from typing import Literal
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class IndexOptions(BaseModel):
+RetrievalMode = Literal["bm25", "hybrid"]
+
+
+class StrictBaseModel(BaseModel):
+    """Base model enforcing strict type validation across all subclasses."""
+
+    model_config = ConfigDict(strict=True)
+
+
+class IndexOptions(StrictBaseModel):
     """Configuration options for corpus indexing.
 
     Attributes:
@@ -20,18 +30,8 @@ class IndexOptions(BaseModel):
     force: bool = False
     embed: bool = False
 
-    @field_validator("max_chunk_size", mode="before")
-    @classmethod
-    def validate_max_chunk_size(cls, v: Any) -> Any:
-        """Validate max_chunk_size is an integer, rejecting boolean values."""
-        if isinstance(v, bool):
-            raise ValueError(
-                "requires a positive integer, not a boolean flag"
-            )
-        return v
 
-
-class SearchOptions(BaseModel):
+class SearchOptions(StrictBaseModel):
     """Configuration options for single query search.
 
     Attributes:
@@ -44,36 +44,25 @@ class SearchOptions(BaseModel):
     query: str
     k: int = Field(default=5, gt=0)
     processed_dir: str = "data/processed"
-    mode: str = "bm25"
+    mode: RetrievalMode = "bm25"
 
-    @field_validator("mode")
+    @field_validator("query")
     @classmethod
-    def validate_mode(cls, v: str) -> str:
-        """Validate mode is either bm25 or hybrid."""
-        if v not in ("bm25", "hybrid"):
-            raise ValueError("must be 'bm25' or 'hybrid'")
-        return v
+    def validate_query(cls, v: str) -> str:
+        """Validate query is a non-empty string.
 
-    @field_validator("k", mode="before")
-    @classmethod
-    def validate_k(cls, v: Any) -> Any:
-        """Validate k is a positive integer, rejecting boolean values."""
-        if isinstance(v, bool):
-            raise ValueError(
-                "requires a positive integer, not a boolean flag"
-            )
-        return v
+        Args:
+            v: Input query string to validate.
 
-    @field_validator("query", mode="before")
-    @classmethod
-    def validate_query(cls, v: Any) -> Any:
-        """Validate query is a non-empty string."""
-        if isinstance(v, bool) or not isinstance(v, str) or not v.strip():
+        Returns:
+            Validated non-empty query string.
+        """
+        if not v.strip():
             raise ValueError("Query must be a non-empty string")
         return v
 
 
-class SearchDatasetOptions(BaseModel):
+class SearchDatasetOptions(StrictBaseModel):
     """Configuration options for batch dataset query retrieval.
 
     Attributes:
@@ -88,28 +77,10 @@ class SearchDatasetOptions(BaseModel):
     k: int = Field(default=5, gt=0)
     save_directory: str = "data/output/search_results"
     processed_dir: str = "data/processed"
-    mode: str = "bm25"
-
-    @field_validator("mode")
-    @classmethod
-    def validate_mode(cls, v: str) -> str:
-        """Validate mode is either bm25 or hybrid."""
-        if v not in ("bm25", "hybrid"):
-            raise ValueError("must be 'bm25' or 'hybrid'")
-        return v
-
-    @field_validator("k", mode="before")
-    @classmethod
-    def validate_k(cls, v: Any) -> Any:
-        """Validate k is a positive integer, rejecting boolean values."""
-        if isinstance(v, bool):
-            raise ValueError(
-                "requires a positive integer, not a boolean flag"
-            )
-        return v
+    mode: RetrievalMode = "bm25"
 
 
-class EvaluateOptions(BaseModel):
+class EvaluateOptions(StrictBaseModel):
     """Configuration options for retrieval evaluation against ground truth.
 
     Attributes:
@@ -121,7 +92,7 @@ class EvaluateOptions(BaseModel):
     dataset_path: str
 
 
-class AnswerOptions(BaseModel):
+class AnswerOptions(StrictBaseModel):
     """Configuration options for single query question answering.
 
     Attributes:
@@ -134,36 +105,25 @@ class AnswerOptions(BaseModel):
     query: str
     k: int = Field(default=5, gt=0)
     processed_dir: str = "data/processed"
-    mode: str = "bm25"
+    mode: RetrievalMode = "bm25"
 
-    @field_validator("mode")
+    @field_validator("query")
     @classmethod
-    def validate_mode(cls, v: str) -> str:
-        """Validate mode is either bm25 or hybrid."""
-        if v not in ("bm25", "hybrid"):
-            raise ValueError("must be 'bm25' or 'hybrid'")
-        return v
+    def validate_query(cls, v: str) -> str:
+        """Validate query is a non-empty string.
 
-    @field_validator("k", mode="before")
-    @classmethod
-    def validate_k(cls, v: Any) -> Any:
-        """Validate k is a positive integer, rejecting boolean values."""
-        if isinstance(v, bool):
-            raise ValueError(
-                "requires a positive integer, not a boolean flag"
-            )
-        return v
+        Args:
+            v: Input query string to validate.
 
-    @field_validator("query", mode="before")
-    @classmethod
-    def validate_query(cls, v: Any) -> Any:
-        """Validate query is a non-empty string."""
-        if isinstance(v, bool) or not isinstance(v, str) or not v.strip():
+        Returns:
+            Validated non-empty query string.
+        """
+        if not v.strip():
             raise ValueError("Query must be a non-empty string")
         return v
 
 
-class AnswerDatasetOptions(BaseModel):
+class AnswerDatasetOptions(StrictBaseModel):
     """Configuration options for batch answer generation over search results.
 
     Attributes:
@@ -175,7 +135,7 @@ class AnswerDatasetOptions(BaseModel):
     save_directory: str = "data/output/search_results_and_answer"
 
 
-class ServeOptions(BaseModel):
+class ServeOptions(StrictBaseModel):
     """Configuration options for launching FastAPI web server.
 
     Attributes:
@@ -187,13 +147,3 @@ class ServeOptions(BaseModel):
     host: str = "127.0.0.1"
     port: int = Field(default=8000, ge=1, le=65535)
     processed_dir: str = "data/processed"
-
-    @field_validator("port", mode="before")
-    @classmethod
-    def validate_port(cls, v: Any) -> Any:
-        """Validate port is a valid port integer, rejecting boolean values."""
-        if isinstance(v, bool):
-            raise ValueError(
-                "requires a port number (1-65535), not a boolean flag"
-            )
-        return v

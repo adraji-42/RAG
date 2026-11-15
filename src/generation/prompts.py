@@ -1,9 +1,9 @@
 """Prompt construction and context formatting for technical answering."""
 
 import re
-from typing import Dict, List, Optional, Pattern
-
+from typing import Any, Dict, List, Optional, Pattern, cast
 from ..models import MinimalSource
+
 
 SYSTEM_PROMPT: str = (
     "You are a precise technical assistant. "
@@ -40,49 +40,115 @@ class PromptBuilder:
             return None
 
     @staticmethod
+    def __count_tokens(tokenizer: Any, text: str) -> int:
+        """Count token length of text using the model tokenizer.
+
+        Args:
+            tokenizer: Pretrained Hugging Face tokenizer instance.
+            text: Input text string to tokenize.
+
+        Returns:
+            Number of tokens in the encoded text.
+        """
+        ids: List[int] = cast(
+            List[int], tokenizer.encode(text, add_special_tokens=False)
+        )
+        return len(ids)
+
+    @classmethod
+    def __base_tokens(cls, tokenizer: Any, question: str) -> int:
+        """Calculate exact token count of system prompt, query, and template.
+
+        Args:
+            tokenizer: Pretrained Hugging Face tokenizer instance.
+            question: User query text string.
+
+        Returns:
+            Number of tokens consumed before adding context chunks.
+        """
+        empty_user: str = f"Context:\n\n\nQuestion: {question}"
+        messages: List[Dict[str, str]] = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": empty_user},
+        ]
+        kwargs: Dict[str, bool] = {
+            "tokenize": False,
+            "add_generation_prompt": True,
+        }
+        try:
+            rendered = tokenizer.apply_chat_template(
+                messages, enable_thinking=False, **kwargs
+            )
+        except TypeError:
+            rendered = tokenizer.apply_chat_template(messages, **kwargs)
+        return cls.__count_tokens(tokenizer, cast(str, rendered))
+
+    @classmethod
     def build_context(
-        sources: List[MinimalSource], max_chars: int = 6000
+        cls,
+        sources: List[MinimalSource],
+        tokenizer: Optional[Any] = None,
+        max_context_tokens: int = 6000,
     ) -> str:
-        """Assemble source snippets into context up to max characters.
+        """Assemble source snippets into context within token budget.
 
         Args:
             sources: List of MinimalSource objects to include.
-            max_chars: Maximum character budget for context.
+            tokenizer: Optional Hugging Face tokenizer for token counting.
+            max_context_tokens: Maximum token budget allocated for chunks.
 
         Returns:
             Formatted context block string from snippets.
         """
-        total: int = 0
+        if max_context_tokens <= 0:
+            return ""
+        used: int = 0
         parts: List[str] = []
         for s in sources:
-            snippet: Optional[str] = PromptBuilder.__read_snippet(s)
-            if snippet is None:
+            snippet: Optional[str] = cls.__read_snippet(s)
+            if not snippet:
                 continue
             block: str = f"[{s.file_path}]\n{snippet}"
-            blen: int = len(block)
-            if total + blen > max_chars:
+            candidate: str = f"\n\n{block}" if parts else block
+            if tokenizer is None:
+                cost: int = len(candidate)
+            else:
+                cost = cls.__count_tokens(tokenizer, candidate)
+            if used + cost > max_context_tokens:
                 break
             parts.append(block)
-            total += blen
+            used += cost
         return "\n\n".join(parts)
 
-    @staticmethod
+    @classmethod
     def build_messages(
-        question: str, sources: List[MinimalSource]
+        cls,
+        question: str,
+        sources: List[MinimalSource],
+        tokenizer: Optional[Any] = None,
+        max_input_tokens: int = 4000,
     ) -> List[Dict[str, str]]:
-        """Construct system and user chat message dictionaries.
+        """Construct system and user chat message dictionaries within budget.
 
         Args:
             question: Query question text string.
             sources: List of retrieved MinimalSource objects.
+            tokenizer: Optional Hugging Face tokenizer for token counting.
+            max_input_tokens: Maximum total input tokens allowed for prompt.
 
         Returns:
             List of system and user chat message dictionaries.
         """
-        context: str = PromptBuilder.build_context(sources)
-        user_content: str = (
-            f"Context:\n{context}\n\nQuestion: {question}"
-        )
+        if tokenizer is not None:
+            base_len: int = cls.__base_tokens(tokenizer, question)
+            budget: int = max(0, max_input_tokens - base_len)
+        else:
+            frame: str = f"Context:\n\n\nQuestion: {question}"
+            budget = max(
+                0, max_input_tokens - len(SYSTEM_PROMPT) - len(frame)
+            )
+        context: str = cls.build_context(sources, tokenizer, budget)
+        user_content: str = f"Context:\n{context}\n\nQuestion: {question}"
         return [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_content},

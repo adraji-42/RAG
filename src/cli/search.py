@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from .io import CliIO
 from .base import BaseCommand
 from ..retrieval import BaseRetriever
-from .models import SearchDatasetOptions, SearchOptions
+from .models import SearchDatasetOptions, SearchOptions, RetrievalMode
 from ..models import (
     MinimalSearchResults,
     MinimalSource,
@@ -27,7 +27,7 @@ class SearchCommand(BaseCommand):
         query: str,
         k: int = 5,
         processed_dir: str = "data/processed",
-        mode: str = "bm25",
+        mode: RetrievalMode = "bm25",
     ) -> None:
         """Retrieve and print matching sources for a single query.
 
@@ -106,7 +106,7 @@ class SearchDatasetCommand(BaseCommand):
         k: int = 5,
         save_directory: str = "data/output/search_results",
         processed_dir: str = "data/processed",
-        mode: str = "bm25",
+        mode: RetrievalMode = "bm25",
     ) -> None:
         """Load dataset, execute batch query search, and save results.
 

@@ -16,8 +16,8 @@ class MinimalSource(BaseModel):
     """
 
     file_path: str
-    first_character_index: int
-    last_character_index: int
+    first_character_index: int = Field(ge=0)
+    last_character_index: int = Field(ge=0)
 
 
 class UnansweredQuestion(BaseModel):

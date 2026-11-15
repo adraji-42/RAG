@@ -3,6 +3,7 @@
 from typing import List
 
 from .serve import ServeCommand
+from .models import RetrievalMode
 from .indexing import IndexCommand
 from .evaluation import EvaluateCommand
 from .search import SearchCommand, SearchDatasetCommand
@@ -37,7 +38,7 @@ class Cli:
         query: str,
         k: int = 5,
         processed_dir: str = "data/processed",
-        mode: str = "bm25",
+        mode: RetrievalMode = "bm25",
     ) -> None:
         """Execute single query search and print retrieved sources.
 
@@ -55,7 +56,7 @@ class Cli:
         k: int = 5,
         save_directory: str = "data/output/search_results",
         processed_dir: str = "data/processed",
-        mode: str = "bm25",
+        mode: RetrievalMode = "bm25",
     ) -> None:
         """Run batch evaluation search on a dataset file.
 
@@ -86,7 +87,7 @@ class Cli:
         query: str,
         k: int = 5,
         processed_dir: str = "data/processed",
-        mode: str = "bm25",
+        mode: RetrievalMode = "bm25",
     ) -> None:
         """Retrieve context and generate an answer for a user query.
 
