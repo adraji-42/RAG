@@ -66,17 +66,22 @@ class AnswerDatasetCommand(BaseCommand):
     """Execute batch answer generation over precomputed search results."""
 
     def __generate_answers(
-        self, results: StudentSearchResults
+        self,
+        results: StudentSearchResults,
+        processed_dir: str = "data/processed",
     ) -> List[MinimalAnswer]:
         """Generate answers sequentially for a batch of search results.
 
         Args:
             results: StudentSearchResults containing retrieved sources.
+            processed_dir: Path to directory containing answer cache.
 
         Returns:
             List of MinimalAnswer objects with generated answers.
         """
-        generator: AnswerGenerator = AnswerGenerator()
+        generator: AnswerGenerator = AnswerGenerator(
+            processed_dir=processed_dir
+        )
         answers: List[MinimalAnswer] = []
         for item in tqdm(
             results.search_results,
@@ -98,18 +103,21 @@ class AnswerDatasetCommand(BaseCommand):
     def cmd(
         self,
         student_search_results_path: str,
-        save_directory: str = "data/output/search_results_and_answer"
+        save_directory: str = "data/output/search_results_and_answer",
+        processed_dir: str = "data/processed",
     ) -> None:
         """Load batch search results, generate answers, and save to output.
 
         Args:
             student_search_results_path: Path to search results JSON file.
             save_directory: Directory path to save output answer file.
+            processed_dir: Path to directory containing answer cache.
         """
         try:
             options: AnswerDatasetOptions = AnswerDatasetOptions(
                 student_search_results_path=student_search_results_path,
                 save_directory=save_directory,
+                processed_dir=processed_dir,
             )
             student_results: Optional[StudentSearchResults] = (
                 CliIO.load_student_results(
@@ -119,7 +127,8 @@ class AnswerDatasetCommand(BaseCommand):
             if student_results is None:
                 return
             answers: List[MinimalAnswer] = self.__generate_answers(
-                student_results
+                student_results,
+                options.processed_dir,
             )
             CliIO.save_result_file(
                 StudentSearchResultsAndAnswer(

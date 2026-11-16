@@ -146,6 +146,8 @@ class RagApiService:
                 Dictionary with service operational status.
             """
             return {"status": "ok"}
+        from ..cli import Cli
 
+        self.__app.post("/index")(Cli.index)
         self.__app.post("/search")(self.__search)
         self.__app.post("/answer")(self.__answer)

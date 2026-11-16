@@ -1,9 +1,9 @@
 """Data models and schemas for retrieval and evaluation."""
 
 import uuid
-from typing import List, Union
+from typing import Any, List, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class MinimalSource(BaseModel):
@@ -18,6 +18,24 @@ class MinimalSource(BaseModel):
     file_path: str
     first_character_index: int = Field(ge=0)
     last_character_index: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def validate_span(self) -> "MinimalSource":
+        """Ensure character indices define a valid non-inverted span.
+
+        Returns:
+            Validated MinimalSource instance.
+
+        Raises:
+            ValueError: If first_character_index > last_character_index.
+        """
+        if self.first_character_index > self.last_character_index:
+            raise ValueError(
+                f"first_character_index ({self.first_character_index}) "
+                f"cannot be greater than last_character_index "
+                f"({self.last_character_index})"
+            )
+        return self
 
 
 class UnansweredQuestion(BaseModel):
@@ -53,6 +71,31 @@ class RagDataset(BaseModel):
 
     rag_questions: List[Union[AnsweredQuestion, UnansweredQuestion]]
 
+    @field_validator("rag_questions", mode="before")
+    @classmethod
+    def validate_questions(cls, v: Any) -> Any:
+        """Validate question dictionaries into correct subclass instances.
+
+        Args:
+            v: Input question instances or dictionaries.
+
+        Returns:
+            List of validated AnsweredQuestion or UnansweredQuestion models.
+        """
+        if not isinstance(v, list):
+            return v
+        validated: List[Union[AnsweredQuestion, UnansweredQuestion]] = []
+        for item in v:
+            if isinstance(item, dict) and (
+                "sources" in item or "answer" in item
+            ):
+                validated.append(AnsweredQuestion.model_validate(item))
+            elif isinstance(item, dict):
+                validated.append(UnansweredQuestion.model_validate(item))
+            else:
+                validated.append(item)
+        return validated
+
 
 class MinimalSearchResults(BaseModel):
     """Represent top retrieved sources for a question.
@@ -87,7 +130,7 @@ class StudentSearchResults(BaseModel):
     """
 
     search_results: List[MinimalSearchResults]
-    k: int
+    k: int = Field(gt=0)
 
 
 class StudentSearchResultsAndAnswer(BaseModel):
@@ -99,4 +142,4 @@ class StudentSearchResultsAndAnswer(BaseModel):
     """
 
     search_results: List[MinimalAnswer]
-    k: int
+    k: int = Field(gt=0)

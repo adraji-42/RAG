@@ -12,8 +12,8 @@ from .search import SearchCommand, SearchDatasetCommand
 class Cli:
     """Command-line interface root dispatcher for RAG operations."""
 
+    @staticmethod
     def index(
-        self,
         max_chunk_size: int = 2000,
         raw_dir: str = "data/raw",
         processed_dir: str = "data/processed",
@@ -33,8 +33,8 @@ class Cli:
             max_chunk_size, raw_dir, processed_dir, force, embed
         )
 
+    @staticmethod
     def search(
-        self,
         query: str,
         k: int = 5,
         processed_dir: str = "data/processed",
@@ -50,8 +50,8 @@ class Cli:
         """
         SearchCommand().cmd(query, k, processed_dir, mode)
 
+    @staticmethod
     def search_dataset(
-        self,
         dataset_path: str,
         k: int = 5,
         save_directory: str = "data/output/search_results",
@@ -71,9 +71,8 @@ class Cli:
             dataset_path, k, save_directory, processed_dir, mode
         )
 
-    def evaluate(
-        self, student_search_results_path: str, dataset_path: str
-    ) -> None:
+    @staticmethod
+    def evaluate(student_search_results_path: str, dataset_path: str) -> None:
         """Evaluate retrieval performance metrics against ground truth.
 
         Args:
@@ -82,8 +81,8 @@ class Cli:
         """
         EvaluateCommand().cmd(student_search_results_path, dataset_path)
 
+    @staticmethod
     def answer(
-        self,
         query: str,
         k: int = 5,
         processed_dir: str = "data/processed",
@@ -101,25 +100,27 @@ class Cli:
 
         AnswerCommand().cmd(query, k, processed_dir, mode)
 
+    @staticmethod
     def answer_dataset(
-        self,
         student_search_results_path: str,
         save_directory: str = "data/output/search_results_and_answer",
+        processed_dir: str = "data/processed",
     ) -> None:
         """Generate answers for a precomputed batch search results file.
 
         Args:
             student_search_results_path: Path to student search results JSON.
             save_directory: Directory path to save answer results.
+            processed_dir: Path to directory containing index files.
         """
         from .answer import AnswerDatasetCommand
 
         AnswerDatasetCommand().cmd(
-            student_search_results_path, save_directory
+            student_search_results_path, save_directory, processed_dir
         )
 
+    @staticmethod
     def serve(
-        self,
         host: str = "127.0.0.1",
         port: int = 8000,
         processed_dir: str = "data/processed",

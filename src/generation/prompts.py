@@ -16,7 +16,9 @@ SYSTEM_PROMPT: str = (
 class PromptBuilder:
     """Format technical contexts, chat messages, and strip think tags."""
 
-    _THINK_RE: Pattern[str] = re.compile(r"<think>.*?</think>", re.DOTALL)
+    _THINK_RE: Pattern[str] = re.compile(
+        r"<think>.*?(?:</think>|$)", re.DOTALL
+    )
 
     @staticmethod
     def __read_snippet(s: MinimalSource) -> Optional[str]:
@@ -30,7 +32,11 @@ class PromptBuilder:
         """
         try:
             with open(
-                s.file_path, "r", encoding="utf-8", errors="replace"
+                s.file_path,
+                "r",
+                encoding="utf-8",
+                errors="replace",
+                newline="",
             ) as f:
                 content: str = f.read()
             return content[
@@ -105,25 +111,27 @@ class PromptBuilder:
         """
         used: int = 0
         parts: List[str] = []
+        has_snippet: bool = False
         for s in sources:
             snippet: Optional[str] = cls.__read_snippet(s)
             if not snippet:
                 continue
+            has_snippet = True
             block: str = f"[{s.file_path}]\n{snippet}"
             candidate: str = f"\n\n{block}" if parts else block
             cost: int = cls.__count_tokens(tokenizer, candidate)
             if used + cost > max_context_tokens:
-                if not parts:
-                    raise ValueError(
-                        "Prompt is too long: cannot fit even one "
-                        "retrieved source within the context window."
-                    )
                 break
             parts.append(block)
             used += cost
         if not parts:
+            if not has_snippet:
+                raise ValueError(
+                    "No valid source snippets available to build context."
+                )
             raise ValueError(
-                "No valid source snippets available to build context."
+                "Prompt is too long: cannot fit even one "
+                "retrieved source within the context window."
             )
         return "\n\n".join(parts)
 

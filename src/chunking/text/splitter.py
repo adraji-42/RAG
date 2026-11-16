@@ -5,6 +5,7 @@ from typing import List
 
 from ..base import Span
 
+_LINE_SPLIT = re.compile(r"\n(?:\s*\n)?")
 _PARAGRAPH_SPLIT = re.compile(r"\n\s*\n")
 _SENTENCE_END = re.compile(r"[.?!]\s+")
 
@@ -112,7 +113,7 @@ class RecursiveTextSplitter:
         """
         pos: int = start
         spans: List[Span] = []
-        for line in content[start:end].split("\n"):
+        for line in _LINE_SPLIT.split(content[start:end]):
             line_end: int = min(pos + len(line) + 1, end)
             spans.append((pos, line_end))
             pos = line_end

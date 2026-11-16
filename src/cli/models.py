@@ -1,4 +1,4 @@
-"""Pydantic configuration and validation models for CLI commands.""""""Pydantic configuration and validation models for CLI commands."""
+"""Pydantic configuration and validation models for CLI commands."""
 
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -133,6 +133,7 @@ class AnswerDatasetOptions(StrictBaseModel):
 
     student_search_results_path: str
     save_directory: str = "data/output/search_results_and_answer"
+    processed_dir: str = "data/processed"
 
 
 class ServeOptions(StrictBaseModel):

@@ -1,12 +1,14 @@
 """Evaluation metrics computing character-level IoU and Recall@k."""
 
-from typing import Dict, List
+import os
+from typing import Dict, List, Optional, Union
 
 from ..models import (
     AnsweredQuestion,
     MinimalSource,
     RagDataset,
     StudentSearchResults,
+    StudentSearchResultsAndAnswer,
 )
 
 
@@ -56,7 +58,9 @@ class Evaluator:
         Returns:
             True if spans belong to same file and meet IoU threshold.
         """
-        if retrieved.file_path != ground_truth.file_path:
+        if os.path.normpath(retrieved.file_path) != os.path.normpath(
+            ground_truth.file_path
+        ):
             return False
         return (
             Evaluator.compute_iou(
@@ -117,27 +121,30 @@ class Evaluator:
 
     def evaluate(
         self,
-        student_results: StudentSearchResults,
+        student_results: Union[
+            StudentSearchResults, StudentSearchResultsAndAnswer
+        ],
         ground_truth: RagDataset,
-        k_values: List[int] = [1, 3, 5, 10],
+        k_values: Optional[List[int]] = None,
     ) -> Dict[int, float]:
         """Evaluate mean recall scores across dataset for k cutoffs.
 
         Args:
             student_results: Student search results for evaluation.
             ground_truth: Ground-truth dataset with reference sources.
-            k_values: List of k cutoffs to calculate recall for.
+            k_values: Optional list of k cutoffs to calculate recall for.
 
         Returns:
             Dictionary mapping each k cutoff to its mean recall score.
         """
+        targets: List[int] = [1, 3, 5, 10] if k_values is None else k_values
         gt_map: Dict[str, AnsweredQuestion] = {
             q.question_id: q
             for q in ground_truth.rag_questions
             if isinstance(q, AnsweredQuestion) and q.sources
         }
         if not gt_map:
-            return {k: 0.0 for k in k_values}
+            return {k: 0.0 for k in targets}
 
         student_map: Dict[str, List[MinimalSource]] = {
             r.question_id: r.retrieved_sources
@@ -145,5 +152,5 @@ class Evaluator:
         }
         return {
             k: self.__mean_recall(k, gt_map, student_map)
-            for k in k_values
+            for k in targets
         }
