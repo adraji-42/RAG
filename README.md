@@ -14,7 +14,7 @@ The pipeline splits Python, Markdown, and text files into syntax-aware chunks, b
 src/
 ├── __main__.py               # CLI entrypoint
 ├── models.py                 # Pydantic schemas (MinimalSource, MinimalAnswer, etc.)
-├── api/                      # FastAPI web server (/health, /search, /answer)
+├── api/                      # FastAPI web server (/health, /index, /search, /answer)
 ├── chunking/                 # AST-based Python & Markdown chunkers + Text fallback
 ├── indexing/                 # BM25, Dense Embeddings, Manifest, and Incremental Indexer
 ├── retrieval/                # BM25Retriever, HybridRetriever (RRF), and QueryCache
@@ -89,6 +89,9 @@ uv run python -m src serve --host 127.0.0.1 --port 8000
 ```bash
 # Health check
 curl -X GET http://127.0.0.1:8000/health
+
+# Index request
+curl -X POST http://127.0.0.1:8000/index
 
 # Search request
 curl -X POST http://127.0.0.1:8000/search \
@@ -224,10 +227,10 @@ To avoid re-indexing unchanged files, `ManifestBuilder.check_status` uses a two-
 ### 7. Disk-Synced Query & Answer Cache (`src/retrieval/cache.py`, `generator.py`)
 
 * **`QueryCache`:** Saves search results and generated answers in `cache.pkl` (up to `max_size = 512` with FIFO eviction). Before reading, `__reload_if_stale` checks `cache.pkl`'s `mtime` so the CLI and FastAPI server stay in sync.
-* **Answer Cache Key (`__build_cache_key`):** Hashes the question together with the exact retrieved source spans using `SHA-256`:
+* **Answer Cache Key (`__build_cache_key`):** Hashes the model name, max new tokens, question, and exact retrieved source spans using `SHA-256`:
 
 $$
-\text{Key} = \text{SHA-256}(\text{question} + \text{file\_path:start:end of each source})
+\text{Key} = \text{SHA-256}(\text{model\_name} + \text{max\_new\_tokens} + \text{question} + \text{file\_path:start:end of each source})
 $$
 
 If the question and retrieved sources haven't changed, the cached answer is returned instantly without loading `Qwen/Qwen3-0.6B`.
@@ -262,7 +265,7 @@ Evaluated on public and private datasets over `vllm-0.10.1` (1,965 files, 14,079
 * **Main Failure Cases:**
   1. **Large Ground-Truth Classes:** When a ground-truth span covers a huge 300-line class, a $2,000$-character chunk of a single method inside that class may have $<5\%$ character overlap ($\text{IoU} < 0.05$).
   2. **Very Short Queries:** Generic 2-word queries match many files (`worker.py`, `engine.py`).
-  3. **Context Window Limit:** To keep CPU generation fast, `PromptBuilder.build_context` caps context at $6,000$ characters.
+  3. **Context Window Limit:** To avoid context overflow, `PromptBuilder.build_context` dynamically budgets context tokens based on the model's maximum context length minus `max_new_tokens`.
 
 ---
 
@@ -276,7 +279,7 @@ Evaluated on public and private datasets over `vllm-0.10.1` (1,965 files, 14,079
    * **Internal Classes (`indexing/`, `retrieval/`):** Validate inputs and raise clear exceptions (`ValueError`, `FileNotFoundError`, `RuntimeError`, `OSError`) instead of failing silently.
    * **CLI & API Layer (`cli/`, `api/`):** Catch exceptions and print clear messages to `sys.stderr` (or return `HTTP 400 Bad Request` in FastAPI) so the program never crashes with raw tracebacks.
 3. **Strict Code Quality:**
-   * All 52 Python files enforce OOP encapsulation, functions $\le 30$ lines, sorted imports, and zero `flake8` or `mypy --strict` errors.
+   * All 53 Python files enforce OOP encapsulation, functions $\le 30$ lines, sorted imports, and zero `flake8` or `mypy --strict` errors.
 
 ---
 
