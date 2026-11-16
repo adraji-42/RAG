@@ -57,7 +57,7 @@ class PromptBuilder:
 
     @classmethod
     def __base_tokens(cls, tokenizer: Any, question: str) -> int:
-        """Calculate exact token count of system prompt, query, and template.
+        """Count exact tokens of system prompt, query, and template.
 
         Args:
             tokenizer: Pretrained Hugging Face tokenizer instance.
@@ -87,21 +87,22 @@ class PromptBuilder:
     def build_context(
         cls,
         sources: List[MinimalSource],
-        tokenizer: Optional[Any] = None,
-        max_context_tokens: int = 6000,
+        tokenizer: Any,
+        max_context_tokens: int,
     ) -> str:
         """Assemble source snippets into context within token budget.
 
         Args:
             sources: List of MinimalSource objects to include.
-            tokenizer: Optional Hugging Face tokenizer for token counting.
+            tokenizer: Pretrained Hugging Face tokenizer for token counting.
             max_context_tokens: Maximum token budget allocated for chunks.
 
         Returns:
             Formatted context block string from snippets.
+
+        Raises:
+            ValueError: If not even one source fits within the token budget.
         """
-        if max_context_tokens <= 0:
-            return ""
         used: int = 0
         parts: List[str] = []
         for s in sources:
@@ -110,14 +111,20 @@ class PromptBuilder:
                 continue
             block: str = f"[{s.file_path}]\n{snippet}"
             candidate: str = f"\n\n{block}" if parts else block
-            if tokenizer is None:
-                cost: int = len(candidate)
-            else:
-                cost = cls.__count_tokens(tokenizer, candidate)
+            cost: int = cls.__count_tokens(tokenizer, candidate)
             if used + cost > max_context_tokens:
+                if not parts:
+                    raise ValueError(
+                        "Prompt is too long: cannot fit even one "
+                        "retrieved source within the context window."
+                    )
                 break
             parts.append(block)
             used += cost
+        if not parts:
+            raise ValueError(
+                "No valid source snippets available to build context."
+            )
         return "\n\n".join(parts)
 
     @classmethod
@@ -125,28 +132,25 @@ class PromptBuilder:
         cls,
         question: str,
         sources: List[MinimalSource],
-        tokenizer: Optional[Any] = None,
-        max_input_tokens: int = 4000,
+        tokenizer: Any,
+        max_input_tokens: int,
     ) -> List[Dict[str, str]]:
-        """Construct system and user chat message dictionaries within budget.
+        """Build system and user chat messages within token budget.
 
         Args:
             question: Query question text string.
             sources: List of retrieved MinimalSource objects.
-            tokenizer: Optional Hugging Face tokenizer for token counting.
+            tokenizer: Pretrained Hugging Face tokenizer for token counting.
             max_input_tokens: Maximum total input tokens allowed for prompt.
 
         Returns:
             List of system and user chat message dictionaries.
+
+        Raises:
+            ValueError: If no retrieved source fits within the token budget.
         """
-        if tokenizer is not None:
-            base_len: int = cls.__base_tokens(tokenizer, question)
-            budget: int = max(0, max_input_tokens - base_len)
-        else:
-            frame: str = f"Context:\n\n\nQuestion: {question}"
-            budget = max(
-                0, max_input_tokens - len(SYSTEM_PROMPT) - len(frame)
-            )
+        base_len: int = cls.__base_tokens(tokenizer, question)
+        budget: int = max_input_tokens - base_len
         context: str = cls.build_context(sources, tokenizer, budget)
         user_content: str = f"Context:\n{context}\n\nQuestion: {question}"
         return [
